@@ -5,13 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bitcoin Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="/chart.min.js"></script>
-    <script>
-        // Fallback to CDN if local Chart.js fails
-        if (typeof Chart === 'undefined') {
-            document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.min.js"><\/script>');
-        }
-    </script>
 </head>
 <body class="bg-gray-100 font-sans">
     <div class="container mx-auto p-4 max-w-4xl">
@@ -57,36 +50,54 @@
             <button onclick="fetchLivePrice()" class="mt-2 bg-gray-600 text-white p-2 rounded-md hover:bg-gray-700">Retry Live Price</button>
         </div>
 
-        <!-- Average Price Graph -->
-        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 class="text-xl font-semibold mb-4">Average Price Over Time (BRL/BTC)</h2>
-            <div id="graphContainer">
-                <canvas id="avgPriceChart" style="max-height: 300px; width: 100%;"></canvas>
-                <p id="graphFallback" class="text-gray-700 hidden">Graph unavailable. Average prices: <span id="avgPriceText"></span></p>
-            </div>
-        </div>
-
         <!-- Transaction History -->
-        <div class="bg-white p-6 rounded-lg shadow-md">
+        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
             <h2 class="text-xl font-semibold mb-4">Transaction History</h2>
             <div id="history" class="space-y-2"></div>
+        </div>
+
+        <!-- Monthly Average Price Table -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+            <h2 class="text-xl font-semibold mb-4">Monthly Average Prices</h2>
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-gray-200">
+                        <th class="p-2 border">Month/Year</th>
+                        <th class="p-2 border">Average Price (BRL/BTC)</th>
+                    </tr>
+                </thead>
+                <tbody id="monthlyPrices" class="text-gray-700"></tbody>
+            </table>
+        </div>
+
+        <!-- Backup Data -->
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold mb-4">Backup Data</h2>
+            <div class="space-y-4">
+                <button onclick="exportData()" class="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700">Export Data</button>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Import Data</label>
+                    <input type="file" id="importFile" accept=".json" class="mt-1 block w-full p-2 border rounded-md">
+                    <button onclick="importData()" class="mt-2 w-full bg-gray-600 text-white p-2 rounded-md hover:bg-gray-700">Import Data</button>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
         let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
-        let chart;
+        let monthlyPrices = JSON.parse(localStorage.getItem('monthlyPrices')) || [];
         let livePrice = null;
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', () => {
             console.log('Page loaded, initializing...');
-            alert('App loaded. Checking Chart.js and Cointrader price...');
+            alert('App loaded. Checking Cointrader price...');
             try {
                 updateSummary();
                 renderHistory();
-                setTimeout(initChart, 2000); // Delay chart init
-                toggleFields();
+                renderMonthlyPrices();
+                checkMonthlyPriceUpdate();
                 fetchLivePrice();
                 setInterval(fetchLivePrice, 60000); // Update every 60 seconds
             } catch (error) {
@@ -95,12 +106,11 @@
             }
         });
 
-        // Fetch live BRL/BTC price from Cointrader Monitor with CORS proxy
+        // Fetch live BRL/BTC price from Cointrader Monitor
         async function fetchLivePrice() {
             console.log('Fetching live price from Cointrader...');
             try {
-                const proxy = 'https://cors-anywhere.herokuapp.com/';
-                const url = proxy + 'https://cointradermonitor.com/api/pbb/v1/ticker';
+                const url = 'https://cointradermonitor.com/api/pbb/v1/ticker';
                 const response = await fetch(url, {
                     mode: 'cors',
                     headers: { 'Accept': 'application/json' }
@@ -112,12 +122,151 @@
                 console.log('Live price from Cointrader:', livePrice);
                 document.getElementById('livePrice').textContent = `Live Price: ${livePrice} BRL/BTC`;
                 updateSummary();
+                checkMonthlyPriceUpdate(); // Check if price needs to be added to table
             } catch (error) {
                 console.error('Error fetching live price:', error.message);
                 livePrice = null;
-                document.getElementById('livePrice').textContent = `Live Price: Unavailable (Error: ${error.message})`;
+                document.getElementById('livePrice').textContent = 'Live Price: Not available';
                 updateSummary();
                 setTimeout(fetchLivePrice, 10000); // Retry after 10 seconds
+            }
+        }
+
+        // Export data to a JSON file
+        function exportData() {
+            console.log('Exporting data...');
+            try {
+                const data = { transactions, monthlyPrices };
+                const jsonString = JSON.stringify(data, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'bitcoin-tracker-backup.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                console.log('Data exported successfully');
+                alert('Data exported as bitcoin-tracker-backup.json');
+            } catch (error) {
+                console.error('Error exporting data:', error);
+                alert('Error exporting data: ' + error.message);
+            }
+        }
+
+        // Import data from a JSON file
+        function importData() {
+            console.log('Importing data...');
+            try {
+                const fileInput = document.getElementById('importFile');
+                if (!fileInput.files.length) {
+                    alert('Please select a JSON file to import.');
+                    console.log('No file selected');
+                    return;
+                }
+
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        if (!Array.isArray(data.transactions) || !Array.isArray(data.monthlyPrices)) {
+                            throw new Error('Invalid file format: missing transactions or monthlyPrices arrays');
+                        }
+                        transactions = data.transactions;
+                        monthlyPrices = data.monthlyPrices;
+                        try {
+                            localStorage.setItem('transactions', JSON.stringify(transactions));
+                            localStorage.setItem('monthlyPrices', JSON.stringify(monthlyPrices));
+                            console.log('Imported data saved to localStorage');
+                        } catch (error) {
+                            throw new Error('Error saving to localStorage: ' + error.message);
+                        }
+                        updateSummary();
+                        renderHistory();
+                        renderMonthlyPrices();
+                        fileInput.value = ''; // Clear file input
+                        console.log('Data imported successfully');
+                        alert('Data imported successfully');
+                    } catch (error) {
+                        console.error('Error parsing imported file:', error);
+                        alert('Error importing data: ' + error.message);
+                    }
+                };
+                reader.onerror = function() {
+                    console.error('Error reading file');
+                    alert('Error reading file');
+                };
+                reader.readAsText(file);
+            } catch (error) {
+                console.error('Error in importData:', error);
+                alert('Error importing data: ' + error.message);
+            }
+        }
+
+        // Check and update monthly price table on the first day of the month
+        function checkMonthlyPriceUpdate() {
+            console.log('Checking monthly price update...');
+            try {
+                const today = new Date();
+                if (today.getDate() !== 1) {
+                    console.log('Not the first day of the month, skipping update');
+                    return;
+                }
+
+                const month = (today.getMonth() + 1).toString().padStart(2, '0');
+                const year = today.getFullYear();
+                const monthYear = `${month}/${year}`;
+
+                // Check if entry for this month/year already exists
+                if (monthlyPrices.some(entry => entry.monthYear === monthYear)) {
+                    console.log(`Entry for ${monthYear} already exists`);
+                    return;
+                }
+
+                // Add new entry only if live price is available
+                if (livePrice) {
+                    monthlyPrices.push({ monthYear, price: parseFloat(livePrice) });
+                    monthlyPrices.sort((a, b) => {
+                        const [aMonth, aYear] = a.monthYear.split('/').map(Number);
+                        const [bMonth, bYear] = b.monthYear.split('/').map(Number);
+                        return aYear - bYear || aMonth - bMonth;
+                    });
+                    try {
+                        localStorage.setItem('monthlyPrices', JSON.stringify(monthlyPrices));
+                        console.log('Monthly price saved to localStorage');
+                        renderMonthlyPrices();
+                    } catch (error) {
+                        console.error('localStorage error:', error);
+                        alert('Error saving monthly price: ' + error.message);
+                    }
+                } else {
+                    console.log('Live price not available, skipping monthly update');
+                }
+            } catch (error) {
+                console.error('Error in checkMonthlyPriceUpdate:', error);
+                alert('Error checking monthly price update: ' + error.message);
+            }
+        }
+
+        // Render monthly prices table
+        function renderMonthlyPrices() {
+            console.log('Rendering monthly prices');
+            try {
+                const tbody = document.getElementById('monthlyPrices');
+                tbody.innerHTML = '';
+                monthlyPrices.forEach(entry => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="p-2 border">${entry.monthYear}</td>
+                        <td class="p-2 border">${parseFloat(entry.price).toFixed(2)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error('Error in renderMonthlyPrices:', error);
+                alert('Error rendering monthly prices: ' + error.message);
             }
         }
 
@@ -181,8 +330,6 @@
                 }
                 updateSummary();
                 renderHistory();
-                updateChart();
-                resetForm();
                 console.log('Transaction added successfully');
             } catch (error) {
                 alert('Error adding transaction: ' + error.message);
@@ -209,7 +356,6 @@
                 }
                 updateSummary();
                 renderHistory();
-                updateChart();
                 console.log('Transaction deleted successfully');
             } catch (error) {
                 alert('Error deleting transaction: ' + error.message);
@@ -286,100 +432,6 @@
             } catch (error) {
                 console.error('Error in renderHistory:', error);
                 alert('Error rendering history: ' + error.message);
-            }
-        }
-
-        function initChart() {
-            console.log('Initializing chart');
-            try {
-                if (typeof Chart === 'undefined') {
-                    console.error('Chart.js not loaded');
-                    alert('Chart.js not loaded. Showing text-based average prices.');
-                    document.getElementById('avgPriceChart').classList.add('hidden');
-                    document.getElementById('graphFallback').classList.remove('hidden');
-                    updateChart(); // Update fallback text
-                    return;
-                }
-
-                const ctx = document.getElementById('avgPriceChart').getContext('2d');
-                if (!ctx) {
-                    console.error('Canvas element not found');
-                    alert('Canvas element not found. Showing text-based average prices.');
-                    document.getElementById('avgPriceChart').classList.add('hidden');
-                    document.getElementById('graphFallback').classList.remove('hidden');
-                    updateChart(); // Update fallback text
-                    return;
-                }
-
-                chart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: [],
-                        datasets: [{
-                            label: 'Average Price (BRL/BTC)',
-                            data: [],
-                            borderColor: 'rgba(75, 192, 192, 1)',
-                            fill: false,
-                            tension: 0.1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: { title: { display: true, text: 'Date' } },
-                            y: { title: { display: true, text: 'Average Price (BRL/BTC)' }, beginAtZero: false }
-                        },
-                        plugins: { legend: { display: true } }
-                    }
-                });
-                console.log('Chart initialized');
-                updateChart();
-            } catch (error) {
-                console.error('Error in initChart:', error);
-                alert('Error initializing chart: ' + error.message);
-                document.getElementById('avgPriceChart').classList.add('hidden');
-                document.getElementById('graphFallback').classList.remove('hidden');
-                updateChart(); // Update fallback text
-            }
-        }
-
-        function updateChart() {
-            console.log('Updating chart');
-            try {
-                let totalSats = 0;
-                let totalBRL = 0;
-                const labels = [];
-                const avgPrices = [];
-                let fallbackText = [];
-
-                transactions.forEach(t => {
-                    if (t.type === 'purchase') {
-                        totalSats += t.satoshis;
-                        totalBRL += t.brl;
-                    } else {
-                        totalSats -= t.taxSatoshis;
-                    }
-
-                    const totalBTC = totalSats / 100000000;
-                    const avgPrice = totalBTC > 0 ? (totalBRL / totalBTC).toFixed(2) : 0;
-                    labels.push(t.date);
-                    avgPrices.push(avgPrice);
-                    fallbackText.push(`${t.date}: ${avgPrice} BRL/BTC`);
-                });
-
-                if (chart) {
-                    chart.data.labels = labels;
-                    chart.data.datasets[0].data = avgPrices;
-                    chart.update();
-                    console.log('Chart updated');
-                }
-
-                // Update fallback text
-                document.getElementById('avgPriceText').textContent = fallbackText.length > 0 ? fallbackText.join(', ') : 'No transactions';
-            } catch (error) {
-                console.error('Error in updateChart:', error);
-                alert('Error updating chart: ' + error.message);
             }
         }
     </script>
