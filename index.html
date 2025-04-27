@@ -220,8 +220,14 @@
                             if (t.type === 'tax' && (!t.taxSatoshis || t.taxSatoshis <= 0)) {
                                 throw new Error('Invalid tax transaction: invalid taxSatoshis');
                             }
-                            if (t.type === 'transfer' && (!t.transferSatoshis || t.transferSatoshis <= 0)) {
-                                throw new Error('Invalid transfer transaction: invalid transferSatoshis');
+                            if (t.type === 'transfer') {
+                                if (!t.transferSatoshis || t.transferSatoshis <= 0) {
+                                    throw new Error('Invalid transfer transaction: invalid transferSatoshis');
+                                }
+                                // Ensure transferBRL exists for compatibility
+                                if (!t.transferBRL) {
+                                    t.transferBRL = 0; // Default for older data
+                                }
                             }
                         }
                         transactions = data.transactions;
@@ -388,19 +394,32 @@
                         console.log('Validation failed: Transfer satoshis too small');
                         return;
                     }
-                    // Validate sufficient satoshis
+                    // Validate sufficient satoshis and BRL
                     let currentSats = 0;
+                    let currentInternalBRL = 0;
                     transactions.forEach(t => {
-                        if (t.type === 'purchase') currentSats += t.satoshis;
-                        else if (t.type === 'tax') currentSats -= t.taxSatoshis;
-                        else if (t.type === 'transfer') currentSats -= t.transferSatoshis;
+                        if (t.type === 'purchase') {
+                            currentSats += t.satoshis;
+                            currentInternalBRL += t.brl;
+                        } else if (t.type === 'tax') {
+                            currentSats -= t.taxSatoshis;
+                        } else if (t.type === 'transfer') {
+                            currentSats -= t.transferSatoshis;
+                            const avgPrice = currentSats > 0 ? (currentInternalBRL / (currentSats / 100000000)) : 0;
+                            currentInternalBRL -= (t.transferSatoshis / 100000000) * avgPrice;
+                        }
                     });
                     if (transferSatoshis > currentSats) {
                         alert('Insufficient satoshis for transfer.');
                         console.log('Validation failed: Insufficient satoshis');
                         return;
                     }
-                    transaction = { date, type, transferSatoshis };
+                    if (transferBRL > currentInternalBRL) {
+                        alert('Insufficient BRL for transfer.');
+                        console.log('Validation failed: Insufficient BRL');
+                        return;
+                    }
+                    transaction = { date, type, transferSatoshis, transferBRL };
                 }
 
                 console.log('Adding transaction:', transaction);
@@ -470,32 +489,39 @@
             console.log('Updating summary');
             try {
                 let totalSats = 0;
-                let totalBRL = 0;
+                let displayBRL = 0;
+                let internalBRL = 0;
 
                 // Process transactions in order to calculate running totals
                 transactions.forEach(t => {
                     if (t.type === 'purchase') {
                         totalSats += t.satoshis;
-                        totalBRL += t.brl;
+                        displayBRL += t.brl;
+                        internalBRL += t.brl;
                     } else if (t.type === 'tax') {
                         totalSats -= t.taxSatoshis;
                     } else if (t.type === 'transfer') {
-                        // Calculate current average price before transfer
-                        const currentAvgPrice = totalSats > 0 ? (totalBRL / (totalSats / 100000000)) : 0;
-                        // Deduct satoshis
                         totalSats -= t.transferSatoshis;
-                        // Deduct proportional BRL to maintain average price
+                        const currentAvgPrice = totalSats > 0 ? (internalBRL / (totalSats / 100000000)) : 0;
                         const brlToDeduct = (t.transferSatoshis / 100000000) * currentAvgPrice;
-                        totalBRL -= brlToDeduct;
+                        internalBRL -= brlToDeduct;
+                        displayBRL -= t.transferBRL || 0; // Use transferBRL for display
                     }
                 });
 
                 // Prevent negative values
                 if (totalSats < 0) totalSats = 0;
-                if (totalBRL < 0) totalBRL = 0;
+                if (displayBRL < 0) displayBRL = 0;
+                if (internalBRL < 0) internalBRL = 0;
+
+                // If no satoshis remain, reset both BRL values to 0
+                if (totalSats === 0) {
+                    displayBRL = 0;
+                    internalBRL = 0;
+                }
 
                 const totalBTC = totalSats / 100000000;
-                const avgPrice = totalBTC > 0 ? (totalBRL / totalBTC).toFixed(2) : 0;
+                const avgPrice = totalBTC > 0 ? (internalBRL / totalBTC).toFixed(2) : 0;
                 let currentValue = 'N/A';
                 if (livePrice && totalSats > 0) {
                     currentValue = ((totalSats / 100000000) * parseFloat(livePrice)).toFixed(2);
@@ -507,7 +533,7 @@
                 }
 
                 document.getElementById('totalSats').innerHTML = `<strong>Total Satoshis:</strong> ${totalSats.toLocaleString()}`;
-                document.getElementById('totalBRL').innerHTML = `<strong>Total BRL Spent:</strong> ${totalBRL.toFixed(2)}`;
+                document.getElementById('totalBRL').innerHTML = `<strong>Total BRL Spent:</strong> ${displayBRL.toFixed(2)}`;
                 document.getElementById('avgPrice').innerHTML = `<strong>Average Price:</strong> ${avgPrice} BRL/BTC`;
                 document.getElementById('currentValue').innerHTML = `<strong>Current Value:</strong> ${currentValue} BRL`;
                 document.getElementById('profitLoss').innerHTML = `<strong>Profit/Loss:</strong> ${profitLoss}`;
@@ -531,7 +557,8 @@
                     } else if (t.type === 'tax') {
                         text = `${t.date}: Paid ${t.taxSatoshis.toLocaleString()} sats in taxes`;
                     } else if (t.type === 'transfer') {
-                        text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats`;
+                        const brlText = t.transferBRL ? ` (${t.transferBRL.toFixed(2)} BRL at market price)` : '';
+                        text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats${brlText}`;
                     }
                     div.innerHTML = `
                         <span>${text}</span>
