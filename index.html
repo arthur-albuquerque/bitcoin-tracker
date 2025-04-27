@@ -220,15 +220,8 @@
                             if (t.type === 'tax' && (!t.taxSatoshis || t.taxSatoshis <= 0)) {
                                 throw new Error('Invalid tax transaction: invalid taxSatoshis');
                             }
-                            if (t.type === 'transfer') {
-                                if (t.transferSatoshis && !t.transferBRL) {
-                                    // Old transfer format, valid
-                                    if (t.transferSatoshis <= 0) {
-                                        throw new Error('Invalid old transfer transaction: invalid transferSatoshis');
-                                    }
-                                } else if (!t.transferBRL || !t.transferSatoshis || t.transferBRL <= 0 || t.transferSatoshis <= 0) {
-                                    throw new Error('Invalid new transfer transaction: invalid transferBRL or transferSatoshis');
-                                }
+                            if (t.type === 'transfer' && (!t.transferSatoshis || t.transferSatoshis <= 0)) {
+                                throw new Error('Invalid transfer transaction: invalid transferSatoshis');
                             }
                         }
                         transactions = data.transactions;
@@ -395,7 +388,19 @@
                         console.log('Validation failed: Transfer satoshis too small');
                         return;
                     }
-                    transaction = { date, type, transferBRL, transferSatoshis };
+                    // Validate sufficient satoshis
+                    let currentSats = 0;
+                    transactions.forEach(t => {
+                        if (t.type === 'purchase') currentSats += t.satoshis;
+                        else if (t.type === 'tax') currentSats -= t.taxSatoshis;
+                        else if (t.type === 'transfer') currentSats -= t.transferSatoshis;
+                    });
+                    if (transferSatoshis > currentSats) {
+                        alert('Insufficient satoshis for transfer.');
+                        console.log('Validation failed: Insufficient satoshis');
+                        return;
+                    }
+                    transaction = { date, type, transferSatoshis };
                 }
 
                 console.log('Adding transaction:', transaction);
@@ -475,14 +480,13 @@
                     } else if (t.type === 'tax') {
                         totalSats -= t.taxSatoshis;
                     } else if (t.type === 'transfer') {
-                        if (t.transferBRL && t.transferSatoshis) {
-                            // New transfer format
-                            totalSats -= t.transferSatoshis;
-                            totalBRL -= t.transferBRL;
-                        } else {
-                            // Old transfer format (backward compatibility)
-                            totalSats -= t.transferSatoshis;
-                        }
+                        // Calculate current average price before transfer
+                        const currentAvgPrice = totalSats > 0 ? (totalBRL / (totalSats / 100000000)) : 0;
+                        // Deduct satoshis
+                        totalSats -= t.transferSatoshis;
+                        // Deduct proportional BRL to maintain average price
+                        const brlToDeduct = (t.transferSatoshis / 100000000) * currentAvgPrice;
+                        totalBRL -= brlToDeduct;
                     }
                 });
 
@@ -527,11 +531,7 @@
                     } else if (t.type === 'tax') {
                         text = `${t.date}: Paid ${t.taxSatoshis.toLocaleString()} sats in taxes`;
                     } else if (t.type === 'transfer') {
-                        if (t.transferBRL) {
-                            text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats for ${t.transferBRL.toFixed(2)} BRL`;
-                        } else {
-                            text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats`;
-                        }
+                        text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats`;
                     }
                     div.innerHTML = `
                         <span>${text}</span>
