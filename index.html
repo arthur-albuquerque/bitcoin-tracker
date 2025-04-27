@@ -37,10 +37,11 @@
                     <input type="number" id="taxSatoshis" min="1" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 100" required>
                 </div>
                 <div id="transferFields" class="hidden">
-                    <label class="block text-sm font-medium text-gray-700">Satoshis Transferred</label>
-                    <input type="number" id="transferSatoshis" min="1" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 100" required>
+                    <label class="block text-sm font-medium text-gray-700">BRL to Transfer</label>
+                    <input type="number" id="transferBRL" min="0" step="0.01" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 21" required>
+                    <p id="transferSatsDisplay" class="mt-1 text-sm text-gray-600">Equivalent: Waiting for live price...</p>
                 </div>
-                <button onclick="addTransaction()" class="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700">Add Transaction</button>
+                <button id="addTransactionBtn" onclick="addTransaction()" class="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700">Add Transaction</button>
             </div>
         </div>
 
@@ -116,6 +117,28 @@
             }
         });
 
+        // Update transfer satoshis display when BRL input changes or live price updates
+        function updateTransferSatsDisplay() {
+            const transferBRLInput = document.getElementById('transferBRL');
+            const transferSatsDisplay = document.getElementById('transferSatsDisplay');
+            const addTransactionBtn = document.getElementById('addTransactionBtn');
+            if (!transferBRLInput || !transferSatsDisplay || !addTransactionBtn) return;
+
+            const transferBRL = parseFloat(transferBRLInput.value);
+            if (livePrice && !isNaN(transferBRL) && transferBRL > 0) {
+                const transferSatoshis = Math.floor((transferBRL / livePrice) * 100000000);
+                transferSatsDisplay.textContent = `Equivalent: ${transferSatoshis.toLocaleString()} satoshis`;
+                addTransactionBtn.disabled = false;
+                addTransactionBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                addTransactionBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            } else {
+                transferSatsDisplay.textContent = livePrice ? 'Enter BRL amount' : 'Live price required for transfer';
+                addTransactionBtn.disabled = true;
+                addTransactionBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                addTransactionBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+            }
+        }
+
         // Fetch live BRL/BTC price from Cointrader Monitor
         async function fetchLivePrice() {
             console.log('Fetching live price from Cointrader...');
@@ -132,12 +155,14 @@
                 console.log('Live price from Cointrader:', livePrice);
                 document.getElementById('livePrice').innerHTML = `<strong>Live Price:</strong> ${livePrice} BRL/BTC`;
                 updateSummary();
-                checkMonthlyPriceUpdate(); // Check if price needs to be added to table
+                checkMonthlyPriceUpdate();
+                updateTransferSatsDisplay(); // Update transfer satoshis display
             } catch (error) {
                 console.error('Error fetching live price:', error.message);
                 livePrice = null;
                 document.getElementById('livePrice').innerHTML = `<strong>Live Price:</strong> Not available`;
                 updateSummary();
+                updateTransferSatsDisplay();
                 setTimeout(fetchLivePrice, 10000); // Retry after 10 seconds
             }
         }
@@ -183,6 +208,28 @@
                         const data = JSON.parse(event.target.result);
                         if (!Array.isArray(data.transactions) || !Array.isArray(data.monthlyPrices)) {
                             throw new Error('Invalid file format: missing transactions or monthlyPrices arrays');
+                        }
+                        // Validate transaction types and fields
+                        for (const t of data.transactions) {
+                            if (!t.date || !t.type) {
+                                throw new Error('Invalid transaction: missing date or type');
+                            }
+                            if (t.type === 'purchase' && (!t.satoshis || !t.brl || t.satoshis <= 0 || t.brl < 0)) {
+                                throw new Error('Invalid purchase transaction: invalid satoshis or BRL');
+                            }
+                            if (t.type === 'tax' && (!t.taxSatoshis || t.taxSatoshis <= 0)) {
+                                throw new Error('Invalid tax transaction: invalid taxSatoshis');
+                            }
+                            if (t.type === 'transfer') {
+                                if (t.transferSatoshis && !t.transferBRL) {
+                                    // Old transfer format, valid
+                                    if (t.transferSatoshis <= 0) {
+                                        throw new Error('Invalid old transfer transaction: invalid transferSatoshis');
+                                    }
+                                } else if (!t.transferBRL || !t.transferSatoshis || t.transferBRL <= 0 || t.transferSatoshis <= 0) {
+                                    throw new Error('Invalid new transfer transaction: invalid transferBRL or transferSatoshis');
+                                }
+                            }
                         }
                         transactions = data.transactions;
                         monthlyPrices = data.monthlyPrices;
@@ -290,11 +337,15 @@
                 document.getElementById('purchaseFields').classList.toggle('hidden', type !== 'purchase');
                 document.getElementById('taxFields').classList.toggle('hidden', type !== 'tax');
                 document.getElementById('transferFields').classList.toggle('hidden', type !== 'transfer');
+                updateTransferSatsDisplay();
             } catch (error) {
                 console.error('Error in toggleFields:', error);
                 alert('Error toggling fields: ' + error.message);
             }
         }
+
+        // Add event listener for transferBRL input
+        document.getElementById('transferBRL').addEventListener('input', updateTransferSatsDisplay);
 
         function addTransaction() {
             console.log('Add Transaction button clicked');
@@ -327,13 +378,24 @@
                     }
                     transaction = { date, type, taxSatoshis };
                 } else if (type === 'transfer') {
-                    const transferSatoshis = parseInt(document.getElementById('transferSatoshis').value);
-                    if (isNaN(transferSatoshis) || transferSatoshis <= 0) {
-                        alert('Please enter a valid transfer amount in satoshis.');
-                        console.log('Validation failed: Invalid transfer satoshis');
+                    const transferBRL = parseFloat(document.getElementById('transferBRL').value);
+                    if (!livePrice) {
+                        alert('Live price is required for transfer transactions.');
+                        console.log('Validation failed: No live price');
                         return;
                     }
-                    transaction = { date, type, transferSatoshis };
+                    if (isNaN(transferBRL) || transferBRL <= 0) {
+                        alert('Please enter a valid BRL amount to transfer.');
+                        console.log('Validation failed: Invalid transfer BRL');
+                        return;
+                    }
+                    const transferSatoshis = Math.floor((transferBRL / livePrice) * 100000000);
+                    if (transferSatoshis <= 0) {
+                        alert('Transfer amount too small to convert to satoshis.');
+                        console.log('Validation failed: Transfer satoshis too small');
+                        return;
+                    }
+                    transaction = { date, type, transferBRL, transferSatoshis };
                 }
 
                 console.log('Adding transaction:', transaction);
@@ -349,6 +411,7 @@
                 }
                 updateSummary();
                 renderHistory();
+                resetForm();
                 console.log('Transaction added successfully');
             } catch (error) {
                 alert('Error adding transaction: ' + error.message);
@@ -390,7 +453,7 @@
                 document.getElementById('satoshis').value = '';
                 document.getElementById('brl').value = '';
                 document.getElementById('taxSatoshis').value = '';
-                document.getElementById('transferSatoshis').value = '';
+                document.getElementById('transferBRL').value = '';
                 toggleFields();
             } catch (error) {
                 console.error('Error in resetForm:', error);
@@ -404,6 +467,7 @@
                 let totalSats = 0;
                 let totalBRL = 0;
 
+                // Process transactions in order to calculate running totals
                 transactions.forEach(t => {
                     if (t.type === 'purchase') {
                         totalSats += t.satoshis;
@@ -411,9 +475,20 @@
                     } else if (t.type === 'tax') {
                         totalSats -= t.taxSatoshis;
                     } else if (t.type === 'transfer') {
-                        totalSats -= t.transferSatoshis;
+                        if (t.transferBRL && t.transferSatoshis) {
+                            // New transfer format
+                            totalSats -= t.transferSatoshis;
+                            totalBRL -= t.transferBRL;
+                        } else {
+                            // Old transfer format (backward compatibility)
+                            totalSats -= t.transferSatoshis;
+                        }
                     }
                 });
+
+                // Prevent negative values
+                if (totalSats < 0) totalSats = 0;
+                if (totalBRL < 0) totalBRL = 0;
 
                 const totalBTC = totalSats / 100000000;
                 const avgPrice = totalBTC > 0 ? (totalBRL / totalBTC).toFixed(2) : 0;
@@ -452,7 +527,11 @@
                     } else if (t.type === 'tax') {
                         text = `${t.date}: Paid ${t.taxSatoshis.toLocaleString()} sats in taxes`;
                     } else if (t.type === 'transfer') {
-                        text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats`;
+                        if (t.transferBRL) {
+                            text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats for ${t.transferBRL.toFixed(2)} BRL`;
+                        } else {
+                            text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats`;
+                        }
                     }
                     div.innerHTML = `
                         <span>${text}</span>
