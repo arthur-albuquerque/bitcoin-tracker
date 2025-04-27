@@ -37,9 +37,22 @@
                     <input type="number" id="taxSatoshis" min="1" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 100" required>
                 </div>
                 <div id="transferFields" class="hidden">
-                    <label class="block text-sm font-medium text-gray-700">BRL to Transfer</label>
-                    <input type="number" id="transferBRL" min="0" step="0.01" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 21" required>
-                    <p id="transferSatsDisplay" class="mt-1 text-sm text-gray-600">Equivalent: Waiting for live price...</p>
+                    <label class="block text-sm font-medium text-gray-700">Transfer Method</label>
+                    <select id="transferType" class="mt-1 block w-full p-2 border rounded-md">
+                        <option value="market">Market Price</option>
+                        <option value="manual">Manual Input</option>
+                    </select>
+                    <div id="marketTransferFields">
+                        <label class="block text-sm font-medium text-gray-700 mt-2">BRL to Transfer</label>
+                        <input type="number" id="transferBRL" min="0" step="0.01" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 21">
+                        <p id="transferSatsDisplay" class="mt-1 text-sm text-gray-600">Equivalent: Waiting for live price...</p>
+                    </div>
+                    <div id="manualTransferFields" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mt-2">Satoshis to Transfer</label>
+                        <input type="number" id="transferSatoshis" min="1" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 146069">
+                        <label class="block text-sm font-medium text-gray-700 mt-2">BRL Amount</label>
+                        <input type="number" id="transferBRLManual" min="0" step="0.01" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 800">
+                    </div>
                 </div>
                 <button id="addTransactionBtn" onclick="addTransaction()" class="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700">Add Transaction</button>
             </div>
@@ -117,25 +130,41 @@
             }
         });
 
-        // Update transfer satoshis display when BRL input changes or live price updates
+        // Update transfer satoshis display for market transfers
         function updateTransferSatsDisplay() {
+            const transferType = document.getElementById('transferType').value;
             const transferBRLInput = document.getElementById('transferBRL');
             const transferSatsDisplay = document.getElementById('transferSatsDisplay');
             const addTransactionBtn = document.getElementById('addTransactionBtn');
             if (!transferBRLInput || !transferSatsDisplay || !addTransactionBtn) return;
 
-            const transferBRL = parseFloat(transferBRLInput.value);
-            if (livePrice && !isNaN(transferBRL) && transferBRL > 0) {
-                const transferSatoshis = Math.floor((transferBRL / livePrice) * 100000000);
-                transferSatsDisplay.textContent = `Equivalent: ${transferSatoshis.toLocaleString()} satoshis`;
-                addTransactionBtn.disabled = false;
-                addTransactionBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
-                addTransactionBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            if (transferType === 'market') {
+                const transferBRL = parseFloat(transferBRLInput.value);
+                if (livePrice && !isNaN(transferBRL) && transferBRL > 0) {
+                    const transferSatoshis = Math.floor((transferBRL / livePrice) * 100000000);
+                    transferSatsDisplay.textContent = `Equivalent: ${transferSatoshis.toLocaleString()} satoshis`;
+                    addTransactionBtn.disabled = false;
+                    addTransactionBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                    addTransactionBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                } else {
+                    transferSatsDisplay.textContent = livePrice ? 'Enter BRL amount' : 'Live price required for market transfer';
+                    addTransactionBtn.disabled = true;
+                    addTransactionBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                    addTransactionBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+                }
             } else {
-                transferSatsDisplay.textContent = livePrice ? 'Enter BRL amount' : 'Live price required for transfer';
-                addTransactionBtn.disabled = true;
-                addTransactionBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
-                addTransactionBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+                // Manual transfer: enable button if fields are filled
+                const transferSatoshis = parseInt(document.getElementById('transferSatoshis').value);
+                const transferBRLManual = parseFloat(document.getElementById('transferBRLManual').value);
+                if (!isNaN(transferSatoshis) && transferSatoshis > 0 && !isNaN(transferBRLManual) && transferBRLManual >= 0) {
+                    addTransactionBtn.disabled = false;
+                    addTransactionBtn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                    addTransactionBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                } else {
+                    addTransactionBtn.disabled = true;
+                    addTransactionBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                    addTransactionBtn.classList.add('bg-gray-400', 'cursor-not-allowed');
+                }
             }
         }
 
@@ -156,7 +185,7 @@
                 document.getElementById('livePrice').innerHTML = `<strong>Live Price:</strong> ${livePrice} BRL/BTC`;
                 updateSummary();
                 checkMonthlyPriceUpdate();
-                updateTransferSatsDisplay(); // Update transfer satoshis display
+                updateTransferSatsDisplay();
             } catch (error) {
                 console.error('Error fetching live price:', error.message);
                 livePrice = null;
@@ -224,10 +253,9 @@
                                 if (!t.transferSatoshis || t.transferSatoshis <= 0) {
                                     throw new Error('Invalid transfer transaction: invalid transferSatoshis');
                                 }
-                                // Ensure transferBRL exists for compatibility
-                                if (!t.transferBRL) {
-                                    t.transferBRL = 0; // Default for older data
-                                }
+                                // Ensure transferBRL and transferType exist
+                                if (!t.transferBRL) t.transferBRL = 0; // Default for older data
+                                if (!t.transferType) t.transferType = 'market'; // Default to market
                             }
                         }
                         transactions = data.transactions;
@@ -328,6 +356,7 @@
 
         // Toggle between purchase, tax, and transfer fields
         document.getElementById('type').addEventListener('change', toggleFields);
+        document.getElementById('transferType').addEventListener('change', toggleTransferFields);
 
         function toggleFields() {
             console.log('Toggling form fields');
@@ -336,6 +365,7 @@
                 document.getElementById('purchaseFields').classList.toggle('hidden', type !== 'purchase');
                 document.getElementById('taxFields').classList.toggle('hidden', type !== 'tax');
                 document.getElementById('transferFields').classList.toggle('hidden', type !== 'transfer');
+                if (type === 'transfer') toggleTransferFields();
                 updateTransferSatsDisplay();
             } catch (error) {
                 console.error('Error in toggleFields:', error);
@@ -343,8 +373,23 @@
             }
         }
 
-        // Add event listener for transferBRL input
+        function toggleTransferFields() {
+            console.log('Toggling transfer fields');
+            try {
+                const transferType = document.getElementById('transferType').value;
+                document.getElementById('marketTransferFields').classList.toggle('hidden', transferType !== 'market');
+                document.getElementById('manualTransferFields').classList.toggle('hidden', transferType !== 'manual');
+                updateTransferSatsDisplay();
+            } catch (error) {
+                console.error('Error in toggleTransferFields:', error);
+                alert('Error toggling transfer fields: ' + error.message);
+            }
+        }
+
+        // Add event listeners for transfer inputs
         document.getElementById('transferBRL').addEventListener('input', updateTransferSatsDisplay);
+        document.getElementById('transferSatoshis').addEventListener('input', updateTransferSatsDisplay);
+        document.getElementById('transferBRLManual').addEventListener('input', updateTransferSatsDisplay);
 
         function addTransaction() {
             console.log('Add Transaction button clicked');
@@ -377,23 +422,42 @@
                     }
                     transaction = { date, type, taxSatoshis };
                 } else if (type === 'transfer') {
-                    const transferBRL = parseFloat(document.getElementById('transferBRL').value);
-                    if (!livePrice) {
-                        alert('Live price is required for transfer transactions.');
-                        console.log('Validation failed: No live price');
-                        return;
+                    const transferType = document.getElementById('transferType').value;
+                    let transferSatoshis, transferBRL;
+
+                    if (transferType === 'market') {
+                        transferBRL = parseFloat(document.getElementById('transferBRL').value);
+                        if (!livePrice) {
+                            alert('Live price is required for market transfer transactions.');
+                            console.log('Validation failed: No live price');
+                            return;
+                        }
+                        if (isNaN(transferBRL) || transferBRL <= 0) {
+                            alert('Please enter a valid BRL amount to transfer.');
+                            console.log('Validation failed: Invalid transfer BRL');
+                            return;
+                        }
+                        transferSatoshis = Math.floor((transferBRL / livePrice) * 100000000);
+                        if (transferSatoshis <= 0) {
+                            alert('Transfer amount too small to convert to satoshis.');
+                            console.log('Validation failed: Transfer satoshis too small');
+                            return;
+                        }
+                    } else {
+                        transferSatoshis = parseInt(document.getElementById('transferSatoshis').value);
+                        transferBRL = parseFloat(document.getElementById('transferBRLManual').value);
+                        if (isNaN(transferSatoshis) || transferSatoshis <= 0) {
+                            alert('Please enter a valid satoshi amount to transfer.');
+                            console.log('Validation failed: Invalid transfer satoshis');
+                            return;
+                        }
+                        if (isNaN(transferBRL) || transferBRL < 0) {
+                            alert('Please enter a valid BRL amount.');
+                            console.log('Validation failed: Invalid transfer BRL');
+                            return;
+                        }
                     }
-                    if (isNaN(transferBRL) || transferBRL <= 0) {
-                        alert('Please enter a valid BRL amount to transfer.');
-                        console.log('Validation failed: Invalid transfer BRL');
-                        return;
-                    }
-                    const transferSatoshis = Math.floor((transferBRL / livePrice) * 100000000);
-                    if (transferSatoshis <= 0) {
-                        alert('Transfer amount too small to convert to satoshis.');
-                        console.log('Validation failed: Transfer satoshis too small');
-                        return;
-                    }
+
                     // Validate sufficient satoshis and BRL
                     let currentSats = 0;
                     let currentInternalBRL = 0;
@@ -419,7 +483,7 @@
                         console.log('Validation failed: Insufficient BRL');
                         return;
                     }
-                    transaction = { date, type, transferSatoshis, transferBRL };
+                    transaction = { date, type, transferSatoshis, transferBRL, transferType };
                 }
 
                 console.log('Adding transaction:', transaction);
@@ -478,6 +542,9 @@
                 document.getElementById('brl').value = '';
                 document.getElementById('taxSatoshis').value = '';
                 document.getElementById('transferBRL').value = '';
+                document.getElementById('transferSatoshis').value = '';
+                document.getElementById('transferBRLManual').value = '';
+                document.getElementById('transferType').value = 'market';
                 toggleFields();
             } catch (error) {
                 console.error('Error in resetForm:', error);
@@ -505,7 +572,7 @@
                         const currentAvgPrice = totalSats > 0 ? (internalBRL / (totalSats / 100000000)) : 0;
                         const brlToDeduct = (t.transferSatoshis / 100000000) * currentAvgPrice;
                         internalBRL -= brlToDeduct;
-                        displayBRL -= t.transferBRL || 0; // Use transferBRL for display
+                        displayBRL -= t.transferBRL || 0;
                     }
                 });
 
@@ -557,8 +624,8 @@
                     } else if (t.type === 'tax') {
                         text = `${t.date}: Paid ${t.taxSatoshis.toLocaleString()} sats in taxes`;
                     } else if (t.type === 'transfer') {
-                        const brlText = t.transferBRL ? ` (${t.transferBRL.toFixed(2)} BRL at market price)` : '';
-                        text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats${brlText}`;
+                        const methodText = t.transferType === 'manual' ? 'manually' : 'at market price';
+                        text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats (${t.transferBRL.toFixed(2)} BRL ${methodText})`;
                     }
                     div.innerHTML = `
                         <span>${text}</span>
