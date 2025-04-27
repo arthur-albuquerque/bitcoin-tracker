@@ -49,9 +49,9 @@
                     </div>
                     <div id="manualTransferFields" class="hidden">
                         <label class="block text-sm font-medium text-gray-700 mt-2">Satoshis to Transfer</label>
-                        <input type="number" id="transferSatoshis" min="1" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 146069">
+                        <input type="number" id="transferSatoshis" min="1" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 130436">
                         <label class="block text-sm font-medium text-gray-700 mt-2">BRL Amount</label>
-                        <input type="number" id="transferBRLManual" min="0" step="0.01" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 800">
+                        <input type="number" id="transferBRLManual" min="0" step="0.01" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 700">
                     </div>
                 </div>
                 <button id="addTransactionBtn" onclick="addTransaction()" class="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700">Add Transaction</button>
@@ -470,7 +470,7 @@
                         } else if (t.type === 'transfer') {
                             currentSats -= t.transferSatoshis;
                             const avgPrice = currentSats > 0 ? (currentInternalBRL / (currentSats / 100000000)) : 0;
-                            currentInternalBRL -= (t.transferSatoshis / 100000000) * avgPrice;
+                            currentInternalBRL -= parseFloat(((t.transferSatoshis / 100000000) * avgPrice).toFixed(2));
                         }
                     });
                     if (transferSatoshis > currentSats) {
@@ -478,9 +478,16 @@
                         console.log('Validation failed: Insufficient satoshis');
                         return;
                     }
+                    const currentAvgPrice = currentSats > 0 ? (currentInternalBRL / (currentSats / 100000000)) : 0;
+                    const brlToDeduct = parseFloat(((transferSatoshis / 100000000) * currentAvgPrice).toFixed(2));
+                    if (brlToDeduct > currentInternalBRL) {
+                        alert('Insufficient BRL cost basis for transfer.');
+                        console.log('Validation failed: Insufficient BRL cost basis');
+                        return;
+                    }
                     if (transferBRL > currentInternalBRL) {
-                        alert('Insufficient BRL for transfer.');
-                        console.log('Validation failed: Insufficient BRL');
+                        alert('Transfer BRL exceeds remaining BRL spent.');
+                        console.log('Validation failed: Transfer BRL too high');
                         return;
                     }
                     transaction = { date, type, transferSatoshis, transferBRL, transferType };
@@ -570,16 +577,26 @@
                     } else if (t.type === 'transfer') {
                         totalSats -= t.transferSatoshis;
                         const currentAvgPrice = totalSats > 0 ? (internalBRL / (totalSats / 100000000)) : 0;
-                        const brlToDeduct = (t.transferSatoshis / 100000000) * currentAvgPrice;
-                        internalBRL -= brlToDeduct;
+                        const brlToDeduct = parseFloat(((t.transferSatoshis / 100000000) * currentAvgPrice).toFixed(2));
+                        internalBRL = parseFloat((internalBRL - brlToDeduct).toFixed(2));
                         displayBRL -= t.transferBRL || 0;
                     }
                 });
 
-                // Prevent negative values
+                // Prevent negative values with tolerance for floating-point errors
                 if (totalSats < 0) totalSats = 0;
-                if (displayBRL < 0) displayBRL = 0;
-                if (internalBRL < 0) internalBRL = 0;
+                if (displayBRL < -0.01) {
+                    console.error('Negative displayBRL:', displayBRL);
+                    displayBRL = 0;
+                } else if (displayBRL < 0) {
+                    displayBRL = 0;
+                }
+                if (internalBRL < -0.01) {
+                    console.error('Negative internalBRL:', internalBRL);
+                    internalBRL = 0;
+                } else if (internalBRL < 0) {
+                    internalBRL = 0;
+                }
 
                 // If no satoshis remain, reset both BRL values to 0
                 if (totalSats === 0) {
@@ -588,20 +605,20 @@
                 }
 
                 const totalBTC = totalSats / 100000000;
-                const avgPrice = totalBTC > 0 ? (internalBRL / totalBTC).toFixed(2) : 0;
+                const avgPrice = totalBTC > 0 ? parseFloat((internalBRL / totalBTC).toFixed(0)) : 0;
                 let currentValue = 'N/A';
                 if (livePrice && totalSats > 0) {
                     currentValue = ((totalSats / 100000000) * parseFloat(livePrice)).toFixed(2);
                 }
                 let profitLoss = 'N/A';
-                if (livePrice && avgPrice > 0) {
-                    const percentage = ((livePrice - avgPrice) / avgPrice) * 100;
+                if (livePrice && avgPrice > 0 && totalSats > 0) {
+                    const percentage = ((parseFloat(livePrice) - avgPrice) / avgPrice) * 100;
                     profitLoss = percentage >= 0 ? `+${percentage.toFixed(2)}%` : `${percentage.toFixed(2)}%`;
                 }
 
                 document.getElementById('totalSats').innerHTML = `<strong>Total Satoshis:</strong> ${totalSats.toLocaleString()}`;
                 document.getElementById('totalBRL').innerHTML = `<strong>Total BRL Spent:</strong> ${displayBRL.toFixed(2)}`;
-                document.getElementById('avgPrice').innerHTML = `<strong>Average Price:</strong> ${avgPrice} BRL/BTC`;
+                document.getElementById('avgPrice').innerHTML = `<strong>Average Price:</strong> ${avgPrice.toLocaleString()} BRL/BTC`;
                 document.getElementById('currentValue').innerHTML = `<strong>Current Value:</strong> ${currentValue} BRL`;
                 document.getElementById('profitLoss').innerHTML = `<strong>Profit/Loss:</strong> ${profitLoss}`;
             } catch (error) {
