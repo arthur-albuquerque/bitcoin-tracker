@@ -6,6 +6,10 @@ Bitcoin Tracker is a web-based application designed to help users monitor their 
 
 This project was developed by Arthur Albuquerque, with assistance from **Grok**, an AI created by xAI. Grok provided guidance, debugging support, and code improvements to ensure accurate calculations, especially for complex scenarios like transfers and zero-BRL purchases.
 
+## Privacy
+
+All information is stored locally in your browser using localStorage. No data is sent to any server, and no one else can access your transaction history or personal information. You can export your data as a JSON file for backup and import it later if needed.
+
 ## Features
 
 - **Add Transactions**:
