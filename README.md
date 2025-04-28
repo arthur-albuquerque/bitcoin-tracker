@@ -16,7 +16,7 @@ This project was developed by Arthur Albuquerque, with assistance from **Grok**,
   - Total Satoshis: Current satoshi balance.
   - Total BRL Spent: Net BRL spent after transfers.
   - Average Price: Weighted average price per BTC (in BRL), adjusted for transfers and zero-BRL purchases.
-  - Live Price: Fetched from Cointrader Monitor API.
+  - Live Price: Fetched from Cointrader Monitor API ([https://cointradermonitor.com/preco-bitcoin-brasil](https://cointradermonitor.com/preco-bitcoin-brasil)).
   - Current Value: Value of holdings based on live price.
   - Profit/Loss: Percentage gain/loss based on average price vs. live price.
 - **Transaction History**:
@@ -106,15 +106,10 @@ Grok’s assistance was instrumental in ensuring the tool accurately tracks cost
 - **Zero BRL Purchases**: Affects average price calculations (warning added during input).
 - **Browser Storage**: Data is stored in `localStorage`, which may be cleared if browser data is wiped. Use Export/Import to back up data.
 
-## Future Improvements
-
-- Add support for multiple cryptocurrencies.
-- Implement user authentication for cloud-based data storage.
-- Enhance UI with charts for price trends.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. 
 
 ## Contact
 
