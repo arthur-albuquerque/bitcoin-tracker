@@ -572,9 +572,9 @@
                         console.log(`Tax: totalSats=${totalSats}, costSats=${costSats}, giftSats=${giftSats}, internalBRL=${internalBRL}`);
                     } else if (t.type === 'transfer') {
                         const currentAvgPrice = costSats > 0 ? (internalBRL / (costSats / 100000000)) : 0;
-                        const brlToDeduct = parseFloat(((t.transferSatoshis / 100000000) * currentAvgPrice).toFixed(2));
+                        const brlToDeduct = (t.transferSatoshis / 100000000) * currentAvgPrice;
                         console.log(`Transfer: sats=${t.transferSatoshis}, brlToDeduct=${brlToDeduct}, internalBRL=${internalBRL}, costSats=${costSats}, avgPrice=${currentAvgPrice}`);
-                        internalBRL = parseFloat((internalBRL - brlToDeduct).toFixed(2));
+                        internalBRL -= brlToDeduct;
                         displayBRL -= t.transferBRL || 0;
                         totalSats -= t.transferSatoshis;
                         costSats -= t.transferSatoshis;
@@ -618,11 +618,11 @@
 
                 const totalBTC = totalSats / 100000000;
                 const costBTC = costSats / 100000000;
-                const avgPrice = costBTC > 0 && internalBRL > 0 ? parseFloat((internalBRL / costBTC).toFixed(0)) : 0;
+                const avgPrice = costBTC > 0 && internalBRL > 0 ? (internalBRL / costBTC) : 0;
                 let currentValue = 'N/A';
                 let profitLoss = 'N/A';
                 if (livePrice && totalSats > 0) {
-                    currentValue = ((totalSats / 100000000) * parseFloat(livePrice)).toFixed(2);
+                    currentValue = ((totalSats / 100000000) * parseFloat(livePrice));
                     if (avgPrice > 0 && costSats > 0) {
                         const percentage = ((parseFloat(livePrice) - avgPrice) / avgPrice) * 100;
                         profitLoss = percentage >= 0 ? `+${percentage.toFixed(2)}%` : `${percentage.toFixed(2)}%`;
@@ -633,8 +633,8 @@
 
                 document.getElementById('totalSats').innerHTML = `<strong>Total Satoshis:</strong> ${totalSats.toLocaleString()}`;
                 document.getElementById('totalBRL').innerHTML = `<strong>Total BRL Spent:</strong> ${displayBRL.toFixed(2)}`;
-                document.getElementById('avgPrice').innerHTML = `<strong>Average Price:</strong> ${avgPrice.toLocaleString()} BRL/BTC`;
-                document.getElementById('currentValue').innerHTML = `<strong>Current Value:</strong> ${currentValue} BRL`;
+                document.getElementById('avgPrice').innerHTML = `<strong>Average Price:</strong> ${Math.round(avgPrice).toLocaleString()} BRL/BTC`;
+                document.getElementById('currentValue').innerHTML = `<strong>Current Value:</strong> ${typeof currentValue === 'number' ? currentValue.toFixed(2) : currentValue} BRL`;
                 document.getElementById('profitLoss').innerHTML = `<strong>Profit/Loss:</strong> ${profitLoss}`;
             } catch (error) {
                 console.error('Error in updateSummary:', error);
