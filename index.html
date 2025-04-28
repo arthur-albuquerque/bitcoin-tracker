@@ -429,6 +429,118 @@
             }
         }
 
+        function toggleTransactionHistory() {
+            console.log('Toggling transaction history visibility');
+            try {
+                const hiddenDiv = document.getElementById('hiddenTransactions');
+                const toggleButton = document.getElementById('toggleHistoryButton');
+                const isHidden = hiddenDiv.classList.contains('hidden');
+                hiddenDiv.classList.toggle('hidden', !isHidden);
+                toggleButton.textContent = isHidden ? 'Show Less' : 'Show More';
+            } catch (error) {
+                console.error('Error in toggleTransactionHistory:', error);
+                alert('Error toggling transaction history: ' + error.message);
+            }
+        }
+
+        function renderHistory() {
+            console.log('Rendering history');
+            try {
+                const historyDiv = document.getElementById('history');
+                historyDiv.innerHTML = '';
+
+                // Sort transactions by date in descending order (latest to earliest)
+                const sortedTransactions = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                // If 10 or fewer transactions, render all
+                if (sortedTransactions.length <= 10) {
+                    sortedTransactions.forEach((t, index) => {
+                        const div = document.createElement('div');
+                        div.className = 'p-2 border-b flex justify-between items-center';
+                        let text;
+                        if (t.type === 'purchase') {
+                            text = `${t.date}: Bought ${t.satoshis.toLocaleString()} sats for ${t.brl.toFixed(2)} BRL`;
+                        } else if (t.type === 'gift') {
+                            text = `${t.date}: Received ${t.giftSatoshis.toLocaleString()} sats as a gift`;
+                        } else if (t.type === 'tax') {
+                            text = `${t.date}: Paid ${t.taxSatoshis.toLocaleString()} sats in taxes`;
+                        } else if (t.type === 'transfer') {
+                            const methodText = t.transferType === 'manual' ? 'manually' : 'at market price';
+                            text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats (${t.transferBRL.toFixed(2)} BRL ${methodText})`;
+                        }
+                        div.innerHTML = `
+                            <span>${text}</span>
+                            <button onclick="deleteTransaction(${transactions.indexOf(t)})" class="bg-red-600 text-white px-2 py-1 rounded-md hover:bg-red-700">Delete</button>
+                        `;
+                        historyDiv.appendChild(div);
+                    });
+                } else {
+                    // More than 10 transactions: render first 10, hide the rest
+                    const visibleTransactions = sortedTransactions.slice(0, 10);
+                    const hiddenTransactions = sortedTransactions.slice(10);
+
+                    // Render the first 10 transactions
+                    visibleTransactions.forEach((t, index) => {
+                        const div = document.createElement('div');
+                        div.className = 'p-2 border-b flex justify-between items-center';
+                        let text;
+                        if (t.type === 'purchase') {
+                            text = `${t.date}: Bought ${t.satoshis.toLocaleString()} sats for ${t.brl.toFixed(2)} BRL`;
+                        } else if (t.type === 'gift') {
+                            text = `${t.date}: Received ${t.giftSatoshis.toLocaleString()} sats as a gift`;
+                        } else if (t.type === 'tax') {
+                            text = `${t.date}: Paid ${t.taxSatoshis.toLocaleString()} sats in taxes`;
+                        } else if (t.type === 'transfer') {
+                            const methodText = t.transferType === 'manual' ? 'manually' : 'at market price';
+                            text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats (${t.transferBRL.toFixed(2)} BRL ${methodText})`;
+                        }
+                        div.innerHTML = `
+                            <span>${text}</span>
+                            <button onclick="deleteTransaction(${transactions.indexOf(t)})" class="bg-red-600 text-white px-2 py-1 rounded-md hover:bg-red-700">Delete</button>
+                        `;
+                        historyDiv.appendChild(div);
+                    });
+
+                    // Create a div for the hidden transactions
+                    const hiddenDiv = document.createElement('div');
+                    hiddenDiv.id = 'hiddenTransactions';
+                    hiddenDiv.className = 'hidden';
+                    hiddenTransactions.forEach((t, index) => {
+                        const div = document.createElement('div');
+                        div.className = 'p-2 border-b flex justify-between items-center';
+                        let text;
+                        if (t.type === 'purchase') {
+                            text = `${t.date}: Bought ${t.satoshis.toLocaleString()} sats for ${t.brl.toFixed(2)} BRL`;
+                        } else if (t.type === 'gift') {
+                            text = `${t.date}: Received ${t.giftSatoshis.toLocaleString()} sats as a gift`;
+                        } else if (t.type === 'tax') {
+                            text = `${t.date}: Paid ${t.taxSatoshis.toLocaleString()} sats in taxes`;
+                        } else if (t.type === 'transfer') {
+                            const methodText = t.transferType === 'manual' ? 'manually' : 'at market price';
+                            text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats (${t.transferBRL.toFixed(2)} BRL ${methodText})`;
+                        }
+                        div.innerHTML = `
+                            <span>${text}</span>
+                            <button onclick="deleteTransaction(${transactions.indexOf(t)})" class="bg-red-600 text-white px-2 py-1 rounded-md hover:bg-red-700">Delete</button>
+                        `;
+                        hiddenDiv.appendChild(div);
+                    });
+                    historyDiv.appendChild(hiddenDiv);
+
+                    // Add "Show More" button
+                    const toggleButton = document.createElement('button');
+                    toggleButton.id = 'toggleHistoryButton';
+                    toggleButton.className = 'mt-2 bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 w-full';
+                    toggleButton.textContent = 'Show More';
+                    toggleButton.onclick = toggleTransactionHistory;
+                    historyDiv.appendChild(toggleButton);
+                }
+            } catch (error) {
+                console.error('Error in renderHistory:', error);
+                alert('Error rendering history: ' + error.message);
+            }
+        }
+
         function updateSummary() {
             console.log('Updating summary');
             try {
@@ -527,37 +639,6 @@
             } catch (error) {
                 console.error('Error in updateSummary:', error);
                 alert('Error updating summary: ' + error.message);
-            }
-        }
-
-        function renderHistory() {
-            console.log('Rendering history');
-            try {
-                const historyDiv = document.getElementById('history');
-                historyDiv.innerHTML = '';
-                transactions.forEach((t, index) => {
-                    const div = document.createElement('div');
-                    div.className = 'p-2 border-b flex justify-between items-center';
-                    let text;
-                    if (t.type === 'purchase') {
-                        text = `${t.date}: Bought ${t.satoshis.toLocaleString()} sats for ${t.brl.toFixed(2)} BRL`;
-                    } else if (t.type === 'gift') {
-                        text = `${t.date}: Received ${t.giftSatoshis.toLocaleString()} sats as a gift`;
-                    } else if (t.type === 'tax') {
-                        text = `${t.date}: Paid ${t.taxSatoshis.toLocaleString()} sats in taxes`;
-                    } else if (t.type === 'transfer') {
-                        const methodText = t.transferType === 'manual' ? 'manually' : 'at market price';
-                        text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats (${t.transferBRL.toFixed(2)} BRL ${methodText})`;
-                    }
-                    div.innerHTML = `
-                        <span>${text}</span>
-                        <button onclick="deleteTransaction(${index})" class="bg-red-600 text-white px-2 py-1 rounded-md hover:bg-red-700">Delete</button>
-                    `;
-                    historyDiv.appendChild(div);
-                });
-            } catch (error) {
-                console.error('Error in renderHistory:', error);
-                alert('Error rendering history: ' + error.message);
             }
         }
 
