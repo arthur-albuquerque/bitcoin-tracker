@@ -44,7 +44,7 @@ All information is stored locally in your browser using localStorage. No data is
 ## Usage
 
 1. **Access the App**:
-   - Visit [https://arthur-albque.github.io/bitcoin-tracker/](https://arthur-albque.github.io/bitcoin-tracker/) on any modern browser (tested on Safari and Chrome).
+   - Visit [https://arthur-albuquerque.github.io/bitcoin-tracker/](https://arthur-albuquerque.github.io/bitcoin-tracker/) on any modern browser (tested on Safari and Chrome).
    
 2. **Add Transactions**:
    - Select a date and transaction type (Purchase, Tax, or Transfer).
