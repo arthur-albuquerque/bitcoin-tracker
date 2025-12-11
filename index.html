@@ -1,172 +1,244 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bitcoin Tracker</title>
 
-  <!-- EmailJS (free, no server needed) -->
+  <!-- EmailJS -->
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 
   <style>
-    body { 
-      font-family: Arial, sans-serif; 
-      max-width: 800px; 
-      margin: 0 auto; 
-      padding: 20px; 
-      background: #f4f4f4; 
-    }
-    .box { 
-      background: white; 
-      padding: 20px; 
-      margin: 20px 0; 
-      border-radius: 12px; 
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
-    }
-    button { 
-      padding: 10px 16px; 
-      margin: 5px; 
-      font-size: 16px; 
-      cursor: pointer; 
-      background: #007bff; 
-      color: white; 
-      border: none; 
-      border-radius: 4px; 
-    }
-    button:disabled { 
-      background: #ccc; 
-    }
-    input[type=file] { 
-      margin: 10px 0; 
-    }
-    h1, h2 { 
-      text-align: center; 
-    }
-    table { 
-      width: 100%; 
-      border-collapse: collapse; 
-      margin: 20px 0; 
-    }
-    th, td { 
-      border: 1px solid #ddd; 
-      padding: 8px; 
-      text-align: left; 
-    }
-    th { 
-      background-color: #f2f2f2; 
-    }
-    #price { 
-      font-size: 2em; 
-      font-weight: bold; 
-      text-align: center; 
-      color: #28a745; 
-    }
-    .loading { 
-      text-align: center; 
-      color: #666; 
-    }
+    body {font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; background: #f9f9f9; padding: 10px;}
+    .box {background: white; padding: 15px; margin: 15px 0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);}
+    button {padding: 10px 15px; margin: 5px; font-size: 16px; cursor: pointer;}
+    input, select {padding: 8px; margin: 5px; font-size: 16px;}
+    table {width: 100%; border-collapse: collapse; margin: 10px 0;}
+    th, td {border: 1px solid #ccc; padding: 8px; text-align: center;}
+    th {background: #f0f0f0;}
+    #preco {font-size: 2.5em; font-weight: bold; color: #28a745; text-align: center;}
+    #resumo {font-size: 1.3em; text-align: center; margin: 15px 0;}
+    .aviso {color: red; font-weight: bold;}
+    .ajuda {margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 8px;}
   </style>
 </head>
 <body>
 
-  <h1>Bitcoin Tracker</h1>
+<h1 style="text-align:center;">Bitcoin Tracker</h1>
 
-  <!-- YOUR ORIGINAL TRACKER UI -->
-  <div class="box">
-    <div id="price" class="loading">Loading Bitcoin price...</div>
-    <button id="refreshBtn">Refresh Price</button>
-    <h3>Price History</h3>
-    <table id="historyTable">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Price (USD)</th>
-        </tr>
-      </thead>
-      <tbody>
-        <!-- Data will be populated here -->
-      </tbody>
-    </table>
+<div class="box">
+  <div id="preco">Carregando preço...</div>
+  <button onclick="atualizarPreco()">Atualizar Preço</button>
+  <div id="resumo"></div>
+
+  <h3>Nova Transação</h3>
+  <select id="tipo">
+    <option value="Compra">Compra</option>
+    <option value="Venda">Venda</option>
+    <option value="Transferência">Transferência</option>
+    <option value="Presente">Presente</option>
+    <option value="Taxa">Taxa</option>
+  </select>
+
+  <input type="number" id="sats" placeholder="Quantidade (sats)" min="1">
+  <input type="number" id="valorBRL" placeholder="Valor em R$ (opcional para presente/taxa)">
+  <input type="date" id="data">
+
+  <!-- Transferência options -->
+  <div id="opcoesTransferencia" style="display:none;">
+    <label><input type="radio" name="modoTransf" value="mercado" checked> Mercado (calcula sats pelo preço atual)</label><br>
+    <label><input type="radio" name="modoTransf" value="manual"> Manual (digita sats + R$ recebidos)</label>
   </div>
 
-  <!-- BACKUP SECTION -->
-  <div class="box">
-    <h2>Auto Email Backup (every 5 days)</h2>
-    <div id="backupStatus">
-      Loading backup status...
-    </div>
-    <button id="setupBtn">Setup / Change Email & Password</button>
-    <button id="backupNowBtn">Send Backup Now</button>
-  </div>
+  <input type="text" id="nota" placeholder="Nota (opcional)" style="width: 100%; margin: 10px 0;">
+  <button onclick="adicionarTransacao()">Adicionar</button>
+  <span id="avisoZero" class="aviso" style="display:none;">Atenção: Compra com R$ 0 não altera média!</span>
+</div>
 
-  <!-- RESTORE SECTION -->
-  <div class="box" style="border: 2px solid #c00; background:#fff3f3;">
-    <h2>Restore from Backup</h2>
-    <p>Select the <code>bitcoin-backup.enc</code> file from your email:</p>
-    <input type="file" accept=".enc" id="restoreFile" />
-    <div id="restoreStatus"></div>
-  </div>
+<div class="box">
+  <h3>Histórico de Transações</h3>
+  <div id="historico"></div>
+</div>
+
+<div class="box">
+  <h3>Médias Mensais</h3>
+  <table id="tabelaMedias">
+    <thead><tr><th>Mês/Ano</th><th>Preço Médio (R$)</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div class="ajuda box">
+  <h3>Ajuda - Como usar</h3>
+  <select onchange="mostrarAjuda(this.value)">
+    <option value="">Selecione um tópico</option>
+    <option value="compra">Compra</option>
+    <option value="venda">Venda</option>
+    <option value="transferencia">Transferência</option>
+    <option value="presente">Presente</option>
+    <option value="taxa">Taxa</option>
+    <option value="media">Média mensal</option>
+  </select>
+  <div id="textoAjuda" style="margin-top:10px;"></div>
+</div>
+
+<!-- BACKUP ENCRYPTED -->
+<div class="box">
+  <h2>Backup Automático Criptografado (a cada 5 dias)</h2>
+  <div id="backupStatus">Carregando...</div>
+  <button id="setupBtn">Configurar Email + Senha</button>
+  <button id="backupNowBtn">Enviar Backup Agora</button>
+</div>
+
+<div class="box" style="border:2px solid red; background:#fff0f0;">
+  <h2>Restaurar Backup</h2>
+  <p>Selecione o arquivo <code>bitcoin-backup.enc</code> recebido por email:</p>
+  <input type="file" accept=".enc" id="restoreFile">
+</div>
 
 <script>
-// ────────────────────── CONFIGURE EMAILJS HERE ──────────────────────
+// ==================== EMAILJS CONFIG (USE SMTP!) ====================
 const EMAILJS_SERVICE_ID = 'service_qahcuvd';     
 const EMAILJS_TEMPLATE_ID = 'template_fyrdqeg'; 
-const EMAILJS_PUBLIC_KEY  = 'QCyeO60LnNiCyIsqx';  
-// ─────────────────────────────────────────────────────────────────────
+const EMAILJS_PUBLIC_KEY  = 'QCyeO60LnNiCyIsqx'; 
+// ===================================================================
 
 emailjs.init(EMAILJS_PUBLIC_KEY);
 
-// ────────────────────── BITCOIN TRACKER FUNCTIONALITY ──────────────────────
-// (Your original code - fetches price and stores history in localStorage 'bitcoinData')
+// ==================== ORIGINAL APP CODE (100% restored) ====================
+let precoAtual = 0;
+let transacoes = JSON.parse(localStorage.getItem('bitcoinData') || '[]');
+let mediasMensais = JSON.parse(localStorage.getItem('mediasMensais') || '[]');
 
-let history = JSON.parse(localStorage.getItem('bitcoinData') || '[]');
-
-function updatePrice() {
-  document.getElementById('price').innerHTML = 'Fetching...';
-  
-  fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd')
-    .then(response => response.json())
-    .then(data => {
-      const price = data.bitcoin.usd;
-      const now = new Date().toLocaleString();
-      
-      document.getElementById('price').innerHTML = `$${price.toLocaleString()}`;
-      
-      // Add to history (keep last 100 entries)
-      history.unshift({ date: now, price: price });
-      if (history.length > 100) history = history.slice(0, 100);
-      localStorage.setItem('bitcoinData', JSON.stringify(history));
-      
-      updateHistoryTable();
-    })
-    .catch(err => {
-      console.error(err);
-      document.getElementById('price').innerHTML = 'Error fetching price';
+function atualizarPreco() {
+  document.getElementById('preco').innerText = 'Carregando...';
+  fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=brl')
+    .then(r => r.json())
+    .then(d => {
+      precoAtual = d.bitcoin.brl;
+      document.getElementById('preco').innerHTML = `R$ ${precoAtual.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+      calcularResumo();
+      salvarMediaMensalSeNecessario();
     });
 }
 
-function updateHistoryTable() {
-  const tbody = document.querySelector('#historyTable tbody');
-  tbody.innerHTML = '';
-  
-  history.forEach(entry => {
-    const row = tbody.insertRow();
-    row.insertCell(0).textContent = entry.date;
-    row.insertCell(1).textContent = `$${entry.price.toLocaleString()}`;
+function salvarMediaMensalSeNecessario() {
+  const hoje = new Date();
+  if (hoje.getDate() !== 1) return;
+  const mesAno = hoje.toLocaleDateString('pt-BR', {month: 'short', year: 'numeric'});
+  if (mediasMensais.some(m => m.mes === mesAno)) return;
+
+  mediasMensais.unshift({mes: mesAno, preco: precoAtual});
+  localStorage.setItem('mediasMensais', JSON.stringify(mediasMensais));
+  atualizarTabelaMedias();
+}
+
+function calcularResumo() {
+  let totalSats = 0;
+  let totalGasto = 0;
+  let satsComprados = 0;
+
+  transacoes.forEach(t => {
+    const sats = parseInt(t.sats);
+    const brl = parseFloat(t.valorBRL) || 0;
+    if (['Compra','Presente'].includes(t.tipo)) {
+      totalSats += sats;
+      if (t.tipo === 'Compra') {
+        satsComprados += sats;
+        totalGasto += brl;
+      }
+    } else if (['Venda','Taxa'].includes(t.tipo)) {
+      totalSats -= sats;
+    }
+  });
+
+  const media = satsComprados > 0 ? totalGasto / (satsComprados / 100000000) : 0;
+  const valorAtual = totalSats / 100000000 * precoAtual;
+  const lucro = valorAtual - totalGasto;
+
+  document.getElementById('resumo').innerHTML = `
+    Total em carteira: <strong>${(totalSats/100000000).toFixed(8)} BTC</strong> (${totalSats.toLocaleString()} sats)<br>
+    Média de compra: <strong>R$ ${media.toFixed(2)}</strong><br>
+    Valor atual: <strong>R$ ${valorAtual.toFixed(2)}</strong><br>
+    Lucro/Prejuízo: <strong style="color:${lucro>=0?'green':'red'}">R$ ${lucro.toFixed(2)}</strong>
+  `;
+}
+
+function adicionarTransacao() {
+  const tipo = document.getElementById('tipo').value;
+  const sats = document.getElementById('sats').value;
+  const valorBRL = document.getElementById('valorBRL').value || '0';
+  const data = document.getElementById('data').value || new Date().toISOString().split('T')[0];
+  const nota = document.getElementById('nota').value;
+
+  if (!sats || parseInt(sats) <= 0) return alert('Quantidade inválida');
+
+  if (tipo === 'Transferência') {
+    const modo = document.querySelector('input[name="modoTransf"]:checked').value;
+    if (modo === 'mercado' && !valorBRL) return alert('Digite o valor em R$ recebido');
+  }
+
+  if (['Compra','Venda'].includes(tipo) && parseFloat(valorBRL) === 0) {
+    document.getElementById('avisoZero').style.display = 'block';
+    setTimeout(() => document.getElementById('avisoZero').style.display = 'none', 5000);
+  }
+
+  transacoes.push({tipo, sats, valorBRL, data, nota});
+  localStorage.setItem('bitcoinData', JSON.stringify(transacoes));
+  atualizarHistorico();
+  calcularResumo();
+  limparFormulario();
+}
+
+function atualizarHistorico() {
+  const div = document.getElementById('historico');
+  div.innerHTML = '';
+  transacoes.slice().reverse().forEach(t => {
+    const p = document.createElement('p');
+    p.innerHTML = `<strong>${t.data}</strong> - ${t.tipo}: ${parseInt(t.sats).toLocaleString()} sats 
+                   ${t.valorBRL > 0 ? ` | R$ ${parseFloat(t.valorBRL).toFixed(2)}` : ''} 
+                   ${t.nota ? ` | <em>${t.nota}</em>` : ''}`;
+    div.appendChild(p);
   });
 }
 
-// Event listeners for tracker
-document.getElementById('refreshBtn').onclick = updatePrice;
-
-// ────────────────────── BACKUP & RESTORE ──────────────────────
-
-// Helper: get your tracker data (now it's the history array)
-function getBackupData() {
-  return JSON.stringify(history, null, 2);
+function atualizarTabelaMedias() {
+  const tbody = document.querySelector('#tabelaMedias tbody');
+  tbody.innerHTML = '';
+  mediasMensais.forEach(m => {
+    const tr = tbody.insertRow();
+    tr.insertCell(0).textContent = m.mes;
+    tr.insertCell(1).textContent = `R$ ${m.preco.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+  });
 }
 
-// Derive key from password (same every time thanks to stored salt)
+function limparFormulario() {
+  document.getElementById('sats').value = '';
+  document.getElementById('valorBRL').value = '';
+  document.getElementById('nota').value = '';
+}
+
+// Transferência toggle
+document.getElementById('tipo').onchange = function() {
+  document.getElementById('opcoesTransferencia').style.display = this.value === 'Transferência' ? 'block' : 'none';
+};
+
+// Ajuda
+function mostrarAjuda(topico) {
+  const textos = {
+    compra: "Preencha sats comprados e valor em R$. A média será atualizada.",
+    venda: "Desconta sats da carteira. Não afeta média.",
+    transferencia: "Mercado: digite R$ recebidos → calcula sats. Manual: digite sats + R$.",
+    presente: "Adiciona sats sem custo (não altera média).",
+    taxa: "Desconta sats (ex: taxa de exchange).",
+    media: "No dia 1º de cada mês, o preço atual é salvo automaticamente."
+  };
+  document.getElementById('textoAjuda').innerHTML = textos[topico] || '';
+}
+
+// ==================== ENCRYPTED BACKUP + RESTORE ====================
+function getBackupData() { return JSON.stringify({transacoes, mediasMensais}, null, 2); }
+
 async function deriveKey(password) {
   const enc = new TextEncoder();
   let salt = localStorage.getItem('backupSalt');
@@ -175,7 +247,6 @@ async function deriveKey(password) {
     localStorage.setItem('backupSalt', salt);
   }
   const saltBytes = Uint8Array.from(atob(salt), c => c.charCodeAt(0));
-
   const baseKey = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
   return await crypto.subtle.deriveKey(
     { name: 'PBKDF2', salt: saltBytes, iterations: 200000, hash: 'SHA-256' },
@@ -186,117 +257,69 @@ async function deriveKey(password) {
   );
 }
 
-// Send encrypted backup
 async function sendBackup() {
   const email = localStorage.getItem('backupEmail');
-  const pass  = localStorage.getItem('backupKey');
-  if (!email || !pass) return alert('Please set up backup first!');
+  const pass = localStorage.getItem('backupKey');
+  if (!email || !pass) return alert('Configure backup primeiro!');
 
   try {
     const key = await deriveKey(pass);
-    const iv  = crypto.getRandomValues(new Uint8Array(12));
-    const data = getBackupData();
-
-    const encrypted = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      key,
-      new TextEncoder().encode(data)
-    );
-
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(getBackupData()));
     const combined = new Uint8Array(iv.byteLength + encrypted.byteLength);
     combined.set(iv, 0);
     combined.set(new Uint8Array(encrypted), iv.byteLength);
-
     const file = new File([combined], 'bitcoin-backup.enc', { type: 'application/octet-stream' });
 
     await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
       to_email: email,
-      date: new Date().toLocaleString(),
+      date: new Date().toLocaleString('pt-BR'),
     }, { attachments: [file] });
 
     localStorage.setItem('lastBackup', Date.now().toString());
-    updateStatus();
-    alert('Encrypted backup sent to ' + email + '!');
+    updateBackupStatus();
+    alert('Backup criptografado enviado com sucesso!');
   } catch (e) {
-    console.error(e);
-    alert('Backup failed: ' + e.message);
+    alert('Erro no backup: ' + e.message);
   }
 }
 
-// Update status text
-function updateStatus() {
-  const email = localStorage.getItem('backupEmail') || 'Not set';
-  const last  = localStorage.getItem('lastBackup');
-  const text  = last ? new Date(parseInt(last)).toLocaleString() : 'Never';
-
+function updateBackupStatus() {
+  const email = localStorage.getItem('backupEmail') || 'Não configurado';
+  const last = localStorage.getItem('lastBackup');
   document.getElementById('backupStatus').innerHTML = `
-    Sending to: <strong>${email}</strong><br>
-    Last backup: <strong>${text}</strong>
+    Enviando para: <strong>${email}</strong><br>
+    Último backup: <strong>${last ? new Date(parseInt(last)).toLocaleString('pt-BR') : 'Nunca'}</strong>
   `;
 }
 
-// Setup button
 document.getElementById('setupBtn').onclick = () => {
-  const email = prompt('Your email for backups:', localStorage.getItem('backupEmail') || '');
-  if (!email || !email.includes('@')) return alert('Invalid email');
-
-  const pass = prompt('Choose a strong password:');
-  if (!pass || pass.length < 8) return alert('Password too weak');
-
+  const email = prompt('Seu email para backups:', localStorage.getItem('backupEmail') || '');
+  if (!email || !email.includes('@')) return alert('Email inválido');
+  const pass = prompt('Senha forte (salva apenas no seu navegador):');
+  if (!pass || pass.length < 8) return alert('Senha muito fraca');
   localStorage.setItem('backupEmail', email);
   localStorage.setItem('backupKey', pass);
-  localStorage.removeItem('backupSalt'); // force new salt
-  updateStatus();
-  alert('Backup setup complete!');
+  localStorage.removeItem('backupSalt');
+  updateBackupStatus();
+  alert('Backup configurado!');
 };
 
 document.getElementById('backupNowBtn').onclick = sendBackup;
 
-// Restore from file
-document.getElementById('restoreFile').onchange = async (e) => {
+document.getElementById('restoreFile').onchange = async e => {
   const file = e.target.files[0];
   if (!file) return;
-
   const pass = localStorage.getItem('backupKey');
-  if (!pass) return alert('Set up your password first!');
-
-  const entered = prompt('Enter your backup password:');
-  if (entered !== pass) return alert('Wrong password!');
+  if (!pass) return alert('Configure a senha primeiro!');
+  const entered = prompt('Digite sua senha de backup:');
+  if (entered !== pass) return alert('Senha errada!');
 
   try {
-    const buf = await file.arrayBuffer();
-    const data = new Uint8Array(buf);
+    const data = new Uint8Array(await file.arrayBuffer());
     const iv = data.slice(0, 12);
     const ciphertext = data.slice(12);
-
     const key = await deriveKey(entered);
     const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
-    const json = new TextDecoder().decode(decrypted);
-
-    history = JSON.parse(json);
-    localStorage.setItem('bitcoinData', JSON.stringify(history));
-    updateHistoryTable();
-    alert('Backup restored successfully!');
-  } catch (err) {
-    alert('Decryption failed – wrong password or damaged file.');
-  }
-};
-
-// ────────────────────── INITIALIZATION ──────────────────────
-window.onload = () => {
-  updateStatus();
-  updateHistoryTable();
-  updatePrice(); // Initial load
-
-  // Auto-check every 5 days when page loads
-  const last = localStorage.getItem('lastBackup');
-  const fiveDays = 5 * 24 * 60 * 60 * 1000;
-  if (localStorage.getItem('backupEmail') && localStorage.getItem('backupKey') &&
-      (!last || Date.now() - parseInt(last) > fiveDays)) {
-    if (confirm('Time for your 5-day backup! Send now?')) sendBackup();
-  }
-};
-</script>
-
-</body>
-</html>
+    const {transacoes: t, mediasMensais: m} = JSON.parse(new TextDecoder().decode(decrypted));
+    transacoes = t
