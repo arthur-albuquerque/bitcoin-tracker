@@ -3,21 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bitcoin Tracker</title>
-
-  <!-- EmailJS (works perfectly with SMTP) -->
-  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-
+  <title>Bitcoin Tracker - Arthur Albuquerque</title>
   <style>
-    body {font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; background: #f9f9f9; padding: 10px;}
-    .box {background: white; padding: 15px; margin: 15px 0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);}
-    button {padding: 8px 12px; margin: 3px; font-size: 14px; cursor: pointer; background:#007bff; color:white; border:none; border-radius:4px;}
+    body {font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; background:#f9f9f9; padding:10px;}
+    .box {background:white; padding:15px; margin:15px 0; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1);}
+    button {padding:8px 12px; margin:3px; font-size:14px; cursor:pointer; background:#007bff; color:white; border:none; border-radius:4px;}
     button.del {background:#dc3545; font-size:12px;}
-    input, select {padding: 8px; margin: 5px; font-size: 16px;}
-    #preco {font-size: 2.5em; font-weight: bold; color: #28a745; text-align: center;}
-    #resumo {font-size: 1.3em; text-align: center; margin: 15px 0;}
-    .aviso {color: red; font-weight: bold;}
-    .transacao {margin: 8px 0; padding: 10px; background:#f8f9fa; border-radius:6px; display:flex; justify-content:space-between; align-items:center;}
+    input, select {padding:8px; margin:5px; font-size:16px;}
+    #preco {font-size:2.5em; font-weight:bold; color:#28a745; text-align:center;}
+    #resumo {font-size:1.3em; text-align:center; margin:15px 0;}
+    .aviso {color:red; font-weight:bold;}
+    .transacao {margin:8px 0; padding:10px; background:#f8f9fa; border-radius:6px; display:flex; justify-content:space-between; align-items:center;}
   </style>
 </head>
 <body>
@@ -73,13 +69,9 @@
 </div>
 
 <script>
-// ==================== EMAILJS + SMTP (FREE & WORKS WITH ATTACHMENTS) ====================
-const EMAILJS_SERVICE_ID = 'service_zc1splm';     
-const EMAILJS_TEMPLATE_ID = 'template_7ltzfig'; 
-const EMAILJS_PUBLIC_KEY  = 'QCyeO60LnNiCyIsqx'; 
+// ==================== FORMSPREE (FREE + ALWAYS ATTACHMENTS) ====================
+const FORMSPREE_ENDPOINT = 'https://formspree.io/f/mjknprye'; 
 // ===================================================================
-
-emailjs.init(EMAILJS_PUBLIC_KEY);
 
 let precoAtual = 0;
 let transacoes = JSON.parse(localStorage.getItem('bitcoinData') || '[]');
@@ -94,8 +86,7 @@ function atualizarPreco() {
       document.getElementById('preco').innerHTML = `R$ ${precoAtual.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
       calcularResumo();
       salvarMediaMensalSeNecessario();
-    })
-    .catch(() => document.getElementById('preco').innerText = 'Erro');
+    });
 }
 
 function salvarMediaMensalSeNecessario() {
@@ -125,7 +116,7 @@ function calcularResumo() {
 
   document.getElementById('resumo').innerHTML = `
     Total: <strong>${(totalSats/100000000).toFixed(8)} BTC</strong> (${totalSats.toLocaleString()} sats)<br>
-    Média: <strong>R$ ${media.toFixed(2)}</strong><br>
+    Investido: <strong>R$ ${totalGasto.toFixed(2)}</strong> | Média: <strong>R$ ${media.toFixed(2)}</strong><br>
     Valor atual: <strong>R$ ${valorAtual.toFixed(2)}</strong><br>
     Lucro/Prejuízo: <strong style="color:${lucro>=0?'green':'red'}">
       R$ ${lucro.toFixed(2)} (${lucro>=0?'+':''}${lucroPercent}%)
@@ -168,15 +159,12 @@ function atualizarHistorico() {
     `;
     div.appendChild(item);
   });
-  document.querySelectorAll('.del').forEach(btn => {
-    btn.onclick = () => {
-      if (confirm('Apagar transação?')) {
-        transacoes.splice(parseInt(btn.dataset.index), 1);
-        localStorage.setItem('bitcoinData', JSON.stringify(transacoes));
-        atualizarHistorico();
-        calcularResumo();
-      }
-    };
+  document.querySelectorAll('.del').forEach(b=>b.onclick=()=> {
+    if(confirm('Apagar?')) {
+      transacoes.splice(parseInt(b.dataset.index),1);
+      localStorage.setItem('bitcoinData', JSON.stringify(transacoes));
+      atualizarHistorico(); calcularResumo();
+    }
   });
 }
 
@@ -190,14 +178,14 @@ function atualizarTabelaMedias() {
   });
 }
 
-// ==================== BACKUP (EmailJS + SMTP - WORKS WITH ATTACHMENT) ====================
-async function deriveKey(password) {
+// ==================== BACKUP VIA FORMSPREE (FREE + ALWAYS ATTACHMENTS) ====================
+async function deriveKey(pw) {
   const enc = new TextEncoder();
   let salt = localStorage.getItem('backupSalt');
   if (!salt) { salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16)))); localStorage.setItem('backupSalt', salt); }
-  const saltBytes = Uint8Array.from(atob(salt), c=>c.charCodeAt(0));
-  const baseKey = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
-  return await crypto.subtle.deriveKey({name:'PBKDF2', salt:saltBytes, iterations:200000, hash:'SHA-256'}, baseKey, {name:'AES-GCM', length:256}, true, ['encrypt','decrypt']);
+  const sb = Uint8Array.from(atob(salt),c=>c.charCodeAt(0));
+  const bk = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return await crypto.subtle.deriveKey({name:'PBKDF2',salt:sb,iterations:200000,hash:'SHA-256'}, bk, {name:'AES-GCM',length:256}, true, ['encrypt','decrypt']);
 }
 
 async function sendBackup() {
@@ -209,68 +197,62 @@ async function sendBackup() {
     const key = await deriveKey(pass);
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const data = JSON.stringify({transacoes, mediasMensais}, null, 2);
-    const encrypted = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, new TextEncoder().encode(data));
-    const combined = new Uint8Array(iv.byteLength + encrypted.byteLength);
-    combined.set(iv,0); combined.set(new Uint8Array(encrypted),iv.byteLength);
+    const enc = await crypto.subtle.encrypt({name:'AES-GCM',iv}, key, new TextEncoder().encode(data));
+    const combined = new Uint8Array(iv.byteLength + enc.byteLength);
+    combined.set(iv,0); combined.set(new Uint8Array(enc),iv.byteLength);
     const file = new File([combined], 'bitcoin-backup.enc', {type:'application/octet-stream'});
 
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_email: email,
-      date: new Date().toLocaleString('pt-BR')
-    }, { attachments: [file] });
+    const fd = new FormData();
+    fd.append('email', email);
+    fd.append('subject', 'Backup Bitcoin Tracker - ' + new Date().toLocaleDateString('pt-BR'));
+    fd.append('message', 'Seu backup criptografado está anexado.');
+    fd.append('attachment', file);
 
-    localStorage.setItem('lastBackup', Date.now().toString());
-    document.getElementById('backupStatus').innerHTML = `Último: ${new Date().toLocaleString('pt-BR')}`;
-    alert('Backup enviado com anexo!');
-  } catch(e) {
-    console.error(e);
-    alert('Erro: ' + e.message);
-  }
+    const r = await fetch(FORMSPREE_ENDPOINT, {method:'POST', body:fd});
+    if (r.ok) {
+      localStorage.setItem('lastBackup', Date.now().toString());
+      document.getElementById('backupStatus').innerHTML = `Último: ${new Date().toLocaleString('pt-BR')}`;
+      alert('Backup enviado COM anexo!');
+    } else throw new Error('Erro');
+  } catch(e) { alert('Erro no backup: '+e.message); }
 }
 
-// ==================== EVENTS ====================
+// ==================== EVENTS & INIT ====================
 document.getElementById('btnAtualizar').onclick = atualizarPreco;
 document.getElementById('btnAdicionar').onclick = adicionarTransacao;
-document.getElementById('tipo').onchange = () => {
-  document.getElementById('opcoesTransferencia').style.display = document.getElementById('tipo').value==='Transferência'?'block':'none';
-};
+document.getElementById('tipo').onchange = () => document.getElementById('opcoesTransferencia').style.display = document.getElementById('tipo').value==='Transferência'?'block':'none';
 document.getElementById('setupBtn').onclick = () => {
-  const email = prompt('Seu email:', localStorage.getItem('backupEmail')||'');
-  if (!email?.includes('@')) return alert('Email inválido');
-  const pass = prompt('Senha forte:');
-  if (!pass || pass.length<8) return alert('Senha fraca');
-  localStorage.setItem('backupEmail', email);
-  localStorage.setItem('backupKey', pass);
+  const e = prompt('Seu email:', localStorage.getItem('backupEmail')||'');
+  if (!e?.includes('@')) return alert('Email inválido');
+  const p = prompt('Senha forte:');
+  if (!p || p.length<8) return alert('Senha fraca');
+  localStorage.setItem('backupEmail', e);
+  localStorage.setItem('backupKey', p);
   localStorage.removeItem('backupSalt');
-  document.getElementById('backupStatus').innerHTML = `Configurado: ${email}`;
+  document.getElementById('backupStatus').innerHTML = `Configurado: ${e}`;
   alert('Backup configurado!');
 };
 document.getElementById('backupNowBtn').onclick = sendBackup;
 document.getElementById('restoreFile').onchange = async e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const pass = localStorage.getItem('backupKey');
-  if (!pass) return alert('Configure a senha!');
-  const entered = prompt('Senha:');
-  if (entered !== pass) return alert('Senha errada!');
+  const f = e.target.files[0]; if (!f) return;
+  const p = localStorage.getItem('backupKey'); if (!p) return alert('Configure a senha!');
+  const ep = prompt('Senha:'); if (ep !== p) return alert('Senha errada!');
   try {
-    const data = new Uint8Array(await file.arrayBuffer());
-    const iv = data.slice(0,12);
-    const ciphertext = data.slice(12);
-    const key = await deriveKey(entered);
-    const decrypted = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ciphertext);
-    const {transacoes:t, mediasMensais:m} = JSON.parse(new TextDecoder().decode(decrypted));
+    const d = new Uint8Array(await f.arrayBuffer());
+    const iv = d.slice(0,12), ct = d.slice(12);
+    const k = await deriveKey(ep);
+    const dec = await crypto.subtle.decrypt({name:'AES-GCM',iv}, k, ct);
+    const {transacoes:t, mediasMensais:m} = JSON.parse(new TextDecoder().decode(dec));
     transacoes = t; mediasMensais = m;
     localStorage.setItem('bitcoinData', JSON.stringify(t));
     localStorage.setItem('mediasMensais', JSON.stringify(m));
     location.reload();
-  } catch { alert('Falha na restauração'); }
+  } catch { alert('Restauração falhou'); }
 };
 
-// ==================== START ====================
 window.onload = () => {
   document.getElementById('backupStatus').innerHTML = localStorage.getItem('backupEmail') 
-    ? `Enviando para: ${localStorage.getItem('backupEmail')}`
+    ? `Enviando para: ${localStorage.getItem('backupEmail')}` 
     : 'Backup não configurado';
   atualizarTabelaMedias();
   atualizarHistorico();
