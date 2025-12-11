@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bitcoin Tracker - Arthur Albuquerque</title>
+  <title>Bitcoin Tracker</title>
 
   <style>
     body {font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; background: #f9f9f9; padding: 10px;}
@@ -71,7 +71,7 @@
 
 <script>
 // ==================== MAILEROO CONFIG (FREE!) ====================
-const MAILERO_API_KEY = '139854ef36f75b01c068715ddaba74a10e86322c3923e8cdb66bccdb4870838c'; 
+const MAILERO_API_KEY = 'YOUR_MAILEROO_SENDING_KEY_HERE';  // ← Paste your real key
 // ===================================================================
 
 let precoAtual = 0;
@@ -114,12 +114,15 @@ function calcularResumo() {
   const media = satsComprados > 0 ? totalGasto / (satsComprados/100000000) : 0;
   const valorAtual = totalSats/100000000 * precoAtual;
   const lucro = valorAtual - totalGasto;
+  const lucroPercent = totalGasto > 0 ? ((lucro / totalGasto) * 100).toFixed(2) : '0.00';
 
   document.getElementById('resumo').innerHTML = `
     Total: <strong>${(totalSats/100000000).toFixed(8)} BTC</strong> (${totalSats.toLocaleString()} sats)<br>
     Média: <strong>R$ ${media.toFixed(2)}</strong><br>
     Valor atual: <strong>R$ ${valorAtual.toFixed(2)}</strong><br>
-    Lucro/Prejuízo: <strong style="color:${lucro>=0?'green':'red'}">R$ ${lucro.toFixed(2)}</strong>
+    Lucro/Prejuízo: <strong style="color:${lucro>=0?'green':'red'}">
+      R$ ${lucro.toFixed(2)} (${lucro>=0?'+':''}${lucroPercent}%)
+    </strong>
   `;
 }
 
@@ -158,8 +161,6 @@ function atualizarHistorico() {
     `;
     div.appendChild(item);
   });
-
-  // Attach delete listeners
   document.querySelectorAll('.del').forEach(btn => {
     btn.addEventListener('click', () => {
       if (confirm('Apagar transação?')) {
@@ -183,7 +184,7 @@ function atualizarTabelaMedias() {
   });
 }
 
-// ==================== BACKUP (Maileroo - FREE + ATTACHMENTS) ====================
+// ==================== BACKUP (FIXED: CORRECT HEADERS + ATTACHMENT) ====================
 async function deriveKey(password) {
   const enc = new TextEncoder();
   let salt = localStorage.getItem('backupSalt');
@@ -211,24 +212,33 @@ async function sendBackup() {
     formData.append('from_name', 'Bitcoin Tracker');
     formData.append('to', email);
     formData.append('subject', 'Backup Bitcoin Tracker - ' + new Date().toLocaleDateString('pt-BR'));
-    formData.append('html', `<p>Seu backup criptografado está anexado. Data: ${new Date().toLocaleString('pt-BR')}</p>`);
+    formData.append('html', `<p>Seu backup criptografado está anexado.<br>Data: ${new Date().toLocaleString('pt-BR')}</p>`);
     formData.append('attachments', file, 'bitcoin-backup.enc');
 
-    const res = await fetch('https://api.maileroo.com/v1/emails', {
+    const response = await fetch('https://api.maileroo.com/v1/emails', {
       method: 'POST',
-      headers: { 'X-MAILEROO-API-KEY': MAILERO_API_KEY },
+      headers: {
+        'X-MAILEROO-API-KEY': 139854ef36f75b01c068715ddaba74a10e86322c3923e8cdb66bccdb4870838c,
+        // DO NOT set Content-Type — browser sets it with boundary for FormData
+      },
       body: formData
     });
 
-    if (res.ok) {
-      localStorage.setItem('lastBackup', Date.now().toString());
-      document.getElementById('backupStatus').innerHTML = `Último: ${new Date().toLocaleString('pt-BR')}`;
-      alert('Backup enviado com anexo!');
-    } else throw new Error('Falha');
-  } catch(e) { alert('Erro no backup: ' + e.message); }
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`HTTP ${response.status}: ${err}`);
+    }
+
+    localStorage.setItem('lastBackup', Date.now().toString());
+    document.getElementById('backupStatus').innerHTML = `Último: ${new Date().toLocaleString('pt-BR')}`;
+    alert('Backup enviado COM anexo!');
+  } catch(e) {
+    console.error(e);
+    alert('Erro no backup: ' + e.message);
+  }
 }
 
-// ==================== EVENT LISTENERS ====================
+// ==================== EVENTS ====================
 document.getElementById('btnAtualizar').addEventListener('click', atualizarPreco);
 document.getElementById('btnAdicionar').addEventListener('click', adicionarTransacao);
 document.getElementById('tipo').addEventListener('change', function() {
