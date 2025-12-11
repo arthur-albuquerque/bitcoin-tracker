@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bitcoin Tracker</title>
 
+  <!-- EmailJS (works perfectly with SMTP) -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
   <style>
     body {font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; background: #f9f9f9; padding: 10px;}
     .box {background: white; padding: 15px; margin: 15px 0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);}
@@ -70,9 +73,13 @@
 </div>
 
 <script>
-// ==================== MAILEROO CONFIG (FREE!) ====================
-const MAILERO_API_KEY = 'YOUR_MAILEROO_SENDING_KEY_HERE';  // ← Paste your real key
+// ==================== EMAILJS + SMTP (FREE & WORKS WITH ATTACHMENTS) ====================
+const EMAILJS_SERVICE_ID = 'service_zc1splm';     
+const EMAILJS_TEMPLATE_ID = 'template_7ltzfig'; 
+const EMAILJS_PUBLIC_KEY  = 'QCyeO60LnNiCyIsqx'; 
 // ===================================================================
+
+emailjs.init(EMAILJS_PUBLIC_KEY);
 
 let precoAtual = 0;
 let transacoes = JSON.parse(localStorage.getItem('bitcoinData') || '[]');
@@ -162,15 +169,14 @@ function atualizarHistorico() {
     div.appendChild(item);
   });
   document.querySelectorAll('.del').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.onclick = () => {
       if (confirm('Apagar transação?')) {
-        const idx = parseInt(btn.dataset.index);
-        transacoes.splice(idx, 1);
+        transacoes.splice(parseInt(btn.dataset.index), 1);
         localStorage.setItem('bitcoinData', JSON.stringify(transacoes));
         atualizarHistorico();
         calcularResumo();
       }
-    });
+    };
   });
 }
 
@@ -184,7 +190,7 @@ function atualizarTabelaMedias() {
   });
 }
 
-// ==================== BACKUP (FIXED: CORRECT HEADERS + ATTACHMENT) ====================
+// ==================== BACKUP (EmailJS + SMTP - WORKS WITH ATTACHMENT) ====================
 async function deriveKey(password) {
   const enc = new TextEncoder();
   let salt = localStorage.getItem('backupSalt');
@@ -208,43 +214,27 @@ async function sendBackup() {
     combined.set(iv,0); combined.set(new Uint8Array(encrypted),iv.byteLength);
     const file = new File([combined], 'bitcoin-backup.enc', {type:'application/octet-stream'});
 
-    const formData = new FormData();
-    formData.append('from_name', 'Bitcoin Tracker');
-    formData.append('to', email);
-    formData.append('subject', 'Backup Bitcoin Tracker - ' + new Date().toLocaleDateString('pt-BR'));
-    formData.append('html', `<p>Seu backup criptografado está anexado.<br>Data: ${new Date().toLocaleString('pt-BR')}</p>`);
-    formData.append('attachments', file, 'bitcoin-backup.enc');
-
-    const response = await fetch('https://api.maileroo.com/v1/emails', {
-      method: 'POST',
-      headers: {
-        'X-MAILEROO-API-KEY': 139854ef36f75b01c068715ddaba74a10e86322c3923e8cdb66bccdb4870838c,
-        // DO NOT set Content-Type — browser sets it with boundary for FormData
-      },
-      body: formData
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`HTTP ${response.status}: ${err}`);
-    }
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_email: email,
+      date: new Date().toLocaleString('pt-BR')
+    }, { attachments: [file] });
 
     localStorage.setItem('lastBackup', Date.now().toString());
     document.getElementById('backupStatus').innerHTML = `Último: ${new Date().toLocaleString('pt-BR')}`;
-    alert('Backup enviado COM anexo!');
+    alert('Backup enviado com anexo!');
   } catch(e) {
     console.error(e);
-    alert('Erro no backup: ' + e.message);
+    alert('Erro: ' + e.message);
   }
 }
 
 // ==================== EVENTS ====================
-document.getElementById('btnAtualizar').addEventListener('click', atualizarPreco);
-document.getElementById('btnAdicionar').addEventListener('click', adicionarTransacao);
-document.getElementById('tipo').addEventListener('change', function() {
-  document.getElementById('opcoesTransferencia').style.display = this.value==='Transferência'?'block':'none';
-});
-document.getElementById('setupBtn').addEventListener('click', () => {
+document.getElementById('btnAtualizar').onclick = atualizarPreco;
+document.getElementById('btnAdicionar').onclick = adicionarTransacao;
+document.getElementById('tipo').onchange = () => {
+  document.getElementById('opcoesTransferencia').style.display = document.getElementById('tipo').value==='Transferência'?'block':'none';
+};
+document.getElementById('setupBtn').onclick = () => {
   const email = prompt('Seu email:', localStorage.getItem('backupEmail')||'');
   if (!email?.includes('@')) return alert('Email inválido');
   const pass = prompt('Senha forte:');
@@ -254,9 +244,9 @@ document.getElementById('setupBtn').addEventListener('click', () => {
   localStorage.removeItem('backupSalt');
   document.getElementById('backupStatus').innerHTML = `Configurado: ${email}`;
   alert('Backup configurado!');
-});
-document.getElementById('backupNowBtn').addEventListener('click', sendBackup);
-document.getElementById('restoreFile').addEventListener('change', async e => {
+};
+document.getElementById('backupNowBtn').onclick = sendBackup;
+document.getElementById('restoreFile').onchange = async e => {
   const file = e.target.files[0];
   if (!file) return;
   const pass = localStorage.getItem('backupKey');
@@ -275,10 +265,10 @@ document.getElementById('restoreFile').addEventListener('change', async e => {
     localStorage.setItem('mediasMensais', JSON.stringify(m));
     location.reload();
   } catch { alert('Falha na restauração'); }
-});
+};
 
-// ==================== INIT ====================
-window.addEventListener('load', () => {
+// ==================== START ====================
+window.onload = () => {
   document.getElementById('backupStatus').innerHTML = localStorage.getItem('backupEmail') 
     ? `Enviando para: ${localStorage.getItem('backupEmail')}`
     : 'Backup não configurado';
@@ -286,7 +276,7 @@ window.addEventListener('load', () => {
   atualizarHistorico();
   atualizarPreco();
   calcularResumo();
-});
+};
 </script>
 </body>
 </html>
