@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bitcoin Tracker</title>
+  <title>Bitcoin Tracker - Arthur Albuquerque</title>
   <style>
     body {font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; background:#f9f9f9; padding:10px;}
     .box {background:white; padding:15px; margin:15px 0; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1);}
@@ -69,15 +69,14 @@
 </div>
 
 <script>
-// ==================== FORMSPREE (FREE & 100% WORKING) ====================
-const FORMSPREE_ENDPOINT = 'https://formspree.io/f/mjknprye'; // ← your real endpoint
+// ==================== SENDGRID CONFIG (FREE + ATTACHMENTS) ====================
+const SENDGRID_API_KEY = 'SG.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'; // ← paste your key
 // ===================================================================
 
 let precoAtual = 0;
 let transacoes = JSON.parse(localStorage.getItem('bitcoinData') || '[]');
 let mediasMensais = JSON.parse(localStorage.getItem('mediasMensais') || '[]');
 
-// ==================== CORE FUNCTIONS ====================
 function atualizarPreco() {
   document.getElementById('preco').innerText = 'Carregando...';
   fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=brl')
@@ -161,16 +160,13 @@ function atualizarHistorico() {
     `;
     div.appendChild(item);
   });
-  document.querySelectorAll('.del').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (confirm('Apagar transação?')) {
-        transacoes.splice(parseInt(btn.dataset.index), 1);
-        localStorage.setItem('bitcoinData', JSON.stringify(transacoes));
-        atualizarHistorico();
-        calcularResumo();
-      }
-    });
-  });
+  document.querySelectorAll('.del').forEach(b => b.addEventListener('click', () => {
+    if (confirm('Apagar?')) {
+      transacoes.splice(parseInt(b.dataset.index), 1);
+      localStorage.setItem('bitcoinData', JSON.stringify(transacoes));
+      atualizarHistorico(); calcularResumo();
+    }
+  }));
 }
 
 function atualizarTabelaMedias() {
@@ -183,7 +179,7 @@ function atualizarTabelaMedias() {
   });
 }
 
-// ==================== BACKUP (FORMSPREE) ====================
+// ==================== BACKUP (SENDGRID - FREE + ATTACHMENTS) ====================
 async function deriveKey(pw) {
   const enc = new TextEncoder();
   let salt = localStorage.getItem('backupSalt');
@@ -205,37 +201,45 @@ async function sendBackup() {
     const encrypted = await crypto.subtle.encrypt({name:'AES-GCM',iv}, key, new TextEncoder().encode(data));
     const combined = new Uint8Array(iv.byteLength + encrypted.byteLength);
     combined.set(iv,0); combined.set(new Uint8Array(encrypted),iv.byteLength);
-    const file = new File([combined], 'bitcoin-backup.enc', {type:'application/octet-stream'});
+    const file = btoa(String.fromCharCode(...combined)); // Base64 for attachment
 
-    const fd = new FormData();
-    fd.append('email', email);
-    fd.append('subject', 'Backup Bitcoin Tracker - ' + new Date().toLocaleDateString('pt-BR'));
-    fd.append('message', 'Seu backup criptografado está anexado.');
-    fd.append('attachment', file);
+    const payload = {
+      personalizations: [{to: [{email}]}],
+      from: {email: 'noreply@yourdomain.com'}, // Use a verified sender
+      subject: 'Backup Bitcoin Tracker - ' + new Date().toLocaleDateString('pt-BR'),
+      content: [{type: 'text/html', value: '<p>Seu backup criptografado está anexado.</p>'}],
+      attachments: [{content: file, filename: 'bitcoin-backup.enc', type: 'application/octet-stream'}]
+    };
 
-    const r = await fetch(FORMSPREE_ENDPOINT, {method:'POST', body:fd});
+    const r = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + SENDGRID_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
     if (r.ok) {
       localStorage.setItem('lastBackup', Date.now().toString());
       document.getElementById('backupStatus').innerHTML = `Último: ${new Date().toLocaleString('pt-BR')}`;
-      alert('Backup enviado com anexo!');
+      alert('Backup enviado COM anexo!');
     } else {
-      const err = await r.text();
-      alert('Erro: ' + (err || 'Falha'));
+      const err = await r.json();
+      throw new Error(err.errors[0].message || 'Falha');
     }
   } catch(e) { alert('Erro: ' + e.message); }
 }
 
-// ==================== ALL EVENT LISTENERS & INIT (SAFE) ====================
+// ==================== INIT & EVENTS ====================
 window.addEventListener('load', () => {
   document.getElementById('backupStatus').innerHTML = localStorage.getItem('backupEmail') 
     ? `Enviando para: ${localStorage.getItem('backupEmail')}` 
     : 'Backup não configurado';
 
-  // Buttons
   document.getElementById('btnAtualizar').addEventListener('click', atualizarPreco);
   document.getElementById('btnAdicionar').addEventListener('click', adicionarTransacao);
-  document.getElementById('tipo').addEventListener('change', function() {
-    document.getElementById('opcoesTransferencia').style.display = this.value==='Transferência'?'block':'none';
+  document.getElementById('tipo').addEventListener('change', () => {
+    document.getElementById('opcoesTransferencia').style.display = document.getElementById('tipo').value==='Transferência'?'block':'none';
   });
   document.getElementById('setupBtn').addEventListener('click', () => {
     const e = prompt('Seu email:', localStorage.getItem('backupEmail')||'');
@@ -266,7 +270,6 @@ window.addEventListener('load', () => {
     } catch { alert('Restauração falhou'); }
   });
 
-  // Init
   atualizarTabelaMedias();
   atualizarHistorico();
   atualizarPreco();
