@@ -5,13 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bitcoin Tracker</title>
 
-  <!-- EmailJS -->
-  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-
   <style>
     body {font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; background: #f9f9f9; padding: 10px;}
     .box {background: white; padding: 15px; margin: 15px 0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);}
-    button {padding: 10px 15px; margin: 5px; font-size: 16px; cursor: pointer; background:#007bff; color:white; border:none; border-radius:4px;}
+    button {padding: 8px 12px; margin: 3px; font-size: 14px; cursor: pointer; background:#007bff; color:white; border:none; border-radius:4px;}
+    button.del {background:#dc3545;}
     input, select {padding: 8px; margin: 5px; font-size: 16px;}
     table {width: 100%; border-collapse: collapse; margin: 10px 0;}
     th, td {border: 1px solid #ccc; padding: 8px; text-align: center;}
@@ -20,6 +18,7 @@
     #resumo {font-size: 1.3em; text-align: center; margin: 15px 0;}
     .aviso {color: red; font-weight: bold;}
     .ajuda {margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 8px;}
+    .transacao {margin: 8px 0; padding: 10px; background:#f8f9fa; border-radius:6px; display:flex; justify-content:space-between; align-items:center;}
   </style>
 </head>
 <body>
@@ -41,7 +40,7 @@
   </select>
 
   <input type="number" id="sats" placeholder="Quantidade (sats)" min="1">
-  <input type="number" id="valorBRL" placeholder="Valor em R$ (opcional para presente/taxa)">
+  <input type="number" id="valorBRL" placeholder="Valor em R$ (opcional)">
   <input type="date" id="data">
 
   <div id="opcoesTransferencia" style="display:none; margin:10px 0;">
@@ -49,9 +48,9 @@
     <label><input type="radio" name="modoTransf" value="manual"> Manual</label>
   </div>
 
-  <input type="text" id="nota" placeholder="Nota (opcional)" style="width: 100%; margin: 10px 0;">
+  <input type="text" id="nota" placeholder="Nota (opcional)" style="width:100%; margin:10px 0;">
   <button id="btnAdicionar">Adicionar</button>
-  <span id="avisoZero" class="aviso" style="display:none;">Atenção: Compra com R$ 0 não altera média!</span>
+  <span id="avisoZero" class="aviso" style="display:none;">Compra com R$ 0 não altera média!</span>
 </div>
 
 <div class="box">
@@ -68,9 +67,9 @@
 </div>
 
 <div class="ajuda box">
-  <h3>Ajuda - Como usar</h3>
+  <h3>Ajuda</h3>
   <select id="selectAjuda">
-    <option value="">Selecione um tópico</option>
+    <option value="">Selecione...</option>
     <option value="compra">Compra</option>
     <option value="venda">Venda</option>
     <option value="transferencia">Transferência</option>
@@ -82,7 +81,7 @@
 </div>
 
 <div class="box">
-  <h2>Backup Automático Criptografado (a cada 5 dias)</h2>
+  <h2>Backup Criptografado (a cada 5 dias)</h2>
   <div id="backupStatus">Carregando...</div>
   <button id="setupBtn">Configurar Email + Senha</button>
   <button id="backupNowBtn">Enviar Backup Agora</button>
@@ -95,15 +94,11 @@
 </div>
 
 <script>
-// ==================== EMAILJS CONFIG ====================
-const EMAILJS_SERVICE_ID = 'service_qahcuvd';     
-const EMAILJS_TEMPLATE_ID = 'template_fyrdqeg'; 
-const EMAILJS_PUBLIC_KEY  = 'QCyeO60LnNiCyIsqx'; 
+// ==================== MAILEROO CONFIG (FREE!) ====================
+const MAILERO_API_KEY = '139854ef36f75b01c068715ddaba74a10e86322c3923e8cdb66bccdb4870838c'; 
 // ===================================================================
 
-emailjs.init(EMAILJS_PUBLIC_KEY);
-
-// ==================== APP DATA ====================
+// ==================== DATA ====================
 let precoAtual = 0;
 let transacoes = JSON.parse(localStorage.getItem('bitcoinData') || '[]');
 let mediasMensais = JSON.parse(localStorage.getItem('mediasMensais') || '[]');
@@ -119,7 +114,7 @@ function atualizarPreco() {
       calcularResumo();
       salvarMediaMensalSeNecessario();
     })
-    .catch(() => document.getElementById('preco').innerText = 'Erro no preço');
+    .catch(() => document.getElementById('preco').innerText = 'Erro');
 }
 
 function salvarMediaMensalSeNecessario() {
@@ -147,8 +142,8 @@ function calcularResumo() {
   const lucro = valorAtual - totalGasto;
 
   document.getElementById('resumo').innerHTML = `
-    Total em carteira: <strong>${(totalSats/100000000).toFixed(8)} BTC</strong> (${totalSats.toLocaleString()} sats)<br>
-    Média de compra: <strong>R$ ${media.toFixed(2)}</strong><br>
+    Total: <strong>${(totalSats/100000000).toFixed(8)} BTC</strong> (${totalSats.toLocaleString()} sats)<br>
+    Média: <strong>R$ ${media.toFixed(2)}</strong><br>
     Valor atual: <strong>R$ ${valorAtual.toFixed(2)}</strong><br>
     Lucro/Prejuízo: <strong style="color:${lucro>=0?'green':'red'}">R$ ${lucro.toFixed(2)}</strong>
   `;
@@ -162,8 +157,6 @@ function adicionarTransacao() {
   const nota = document.getElementById('nota').value;
 
   if (!sats || parseInt(sats)<=0) return alert('Quantidade inválida');
-  if (tipo==='Transferência' && document.querySelector('input[name="modoTransf"]:checked').value==='mercado' && parseFloat(valorBRL)===0)
-    return alert('Digite o valor em R$ recebido');
 
   if (['Compra','Venda'].includes(tipo) && parseFloat(valorBRL)===0) {
     document.getElementById('avisoZero').style.display='block';
@@ -180,13 +173,27 @@ function adicionarTransacao() {
 function atualizarHistorico() {
   const div = document.getElementById('historico');
   div.innerHTML = '';
-  transacoes.slice().reverse().forEach(t => {
-    const p = document.createElement('p');
-    p.innerHTML = `<strong>${t.data}</strong> - ${t.tipo}: ${parseInt(t.sats).toLocaleString()} sats 
-                   ${parseFloat(t.valorBRL)>0?` | R$ ${parseFloat(t.valorBRL).toFixed(2)}`:''} 
-                   ${t.nota?` | <em>${t.nota}</em>`:''}`;
+  transacoes.slice().reverse().forEach((t, index) => {
+    const originalIndex = transacoes.length - 1 - index;
+    const p = document.createElement('div');
+    p.className = 'transacao';
+    p.innerHTML = `
+      <span><strong>${t.data}</strong> - ${t.tipo}: ${parseInt(t.sats).toLocaleString()} sats 
+      ${parseFloat(t.valorBRL)>0?` | R$ ${parseFloat(t.valorBRL).toFixed(2)}`:''} 
+      ${t.nota?` | <em>${t.nota}</em>`:''}</span>
+      <button class="del" onclick="deletarTransacao(${originalIndex})">Apagar</button>
+    `;
     div.appendChild(p);
   });
+}
+
+function deletarTransacao(index) {
+  if (confirm('Apagar esta transação?')) {
+    transacoes.splice(index, 1);
+    localStorage.setItem('bitcoinData', JSON.stringify(transacoes));
+    atualizarHistorico();
+    calcularResumo();
+  }
 }
 
 function atualizarTabelaMedias() {
@@ -199,7 +206,7 @@ function atualizarTabelaMedias() {
   });
 }
 
-// ==================== EVENT LISTENERS (ONLY addEventListener) ====================
+// ==================== EVENTS ====================
 document.getElementById('btnAtualizar').addEventListener('click', atualizarPreco);
 document.getElementById('btnAdicionar').addEventListener('click', adicionarTransacao);
 document.getElementById('tipo').addEventListener('change', function() {
@@ -207,19 +214,17 @@ document.getElementById('tipo').addEventListener('change', function() {
 });
 document.getElementById('selectAjuda').addEventListener('change', function() {
   const textos = {
-    compra:"Preencha sats comprados e valor em R$. A média será atualizada.",
-    venda:"Desconta sats da carteira. Não afeta média.",
-    transferencia:"Mercado: digite R$ recebidos → calcula sats. Manual: digite sats + R$.",
-    presente:"Adiciona sats sem custo (não altera média).",
-    taxa:"Desconta sats (ex: taxa de exchange).",
-    media:"No dia 1º de cada mês, o preço atual é salvo automaticamente."
+    compra:"Preencha sats e R$.",
+    venda:"Desconta sats.",
+    transferencia:"Mercado: digite R$ → calcula sats. Manual: digite ambos.",
+    presente:"Adiciona sats grátis.",
+    taxa:"Desconta sats (taxa).",
+    media:"Dia 1º de cada mês salva preço."
   };
   document.getElementById('textoAjuda').innerHTML = textos[this.value] || '';
-});
+};
 
-// ==================== BACKUP & RESTORE ====================
-function getBackupData() { return JSON.stringify({transacoes, mediasMensais}, null, 2); }
-
+// ==================== BACKUP (FREE MAILERO) ====================
 async function deriveKey(password) {
   const enc = new TextEncoder();
   let salt = localStorage.getItem('backupSalt');
@@ -237,16 +242,36 @@ async function sendBackup() {
   try {
     const key = await deriveKey(pass);
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, new TextEncoder().encode(getBackupData()));
+    const data = JSON.stringify({transacoes, mediasMensais}, null, 2);
+    const encrypted = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, new TextEncoder().encode(data));
     const combined = new Uint8Array(iv.byteLength + encrypted.byteLength);
     combined.set(iv,0); combined.set(new Uint8Array(encrypted),iv.byteLength);
-    const file = new File([combined], 'bitcoin-backup.enc', {type:'application/octet-stream'});
 
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {to_email:email, date:new Date().toLocaleString('pt-BR')}, {attachments:[file]});
-    localStorage.setItem('lastBackup', Date.now().toString());
-    document.getElementById('backupStatus').innerHTML = `Último backup: <strong>${new Date().toLocaleString('pt-BR')}</strong>`;
-    alert('Backup enviado com sucesso!');
-  } catch(e) { alert('Erro: '+e.message); }
+    // Create FormData for attachment
+    const formData = new FormData();
+    formData.append('from_name', 'Bitcoin Tracker');
+    formData.append('to', email);
+    formData.append('subject', 'Backup Bitcoin Tracker - ' + new Date().toLocaleDateString('pt-BR'));
+    formData.append('html', `<p>Seu backup criptografado está anexado. Data: ${new Date().toLocaleString('pt-BR')}</p>`);
+    formData.append('attachments', new File([combined], 'bitcoin-backup.enc', {type: 'application/octet-stream'}), 'bitcoin-backup.enc');
+
+    const response = await fetch('https://api.maileroo.com/v1/emails', {
+      method: 'POST',
+      headers: { 'X-MAILEROO-API-KEY': MAILERO_API_KEY },
+      body: formData
+    });
+
+    if (response.ok) {
+      localStorage.setItem('lastBackup', Date.now().toString());
+      document.getElementById('backupStatus').innerHTML = `Último backup: ${new Date().toLocaleString('pt-BR')}`;
+      alert('Backup enviado COM anexo!');
+    } else {
+      throw new Error('Falha no envio');
+    }
+  } catch(e) {
+    console.error(e);
+    alert('Erro: ' + e.message);
+  }
 }
 
 document.getElementById('setupBtn').addEventListener('click', () => {
@@ -257,7 +282,7 @@ document.getElementById('setupBtn').addEventListener('click', () => {
   localStorage.setItem('backupEmail', email);
   localStorage.setItem('backupKey', pass);
   localStorage.removeItem('backupSalt');
-  document.getElementById('backupStatus').innerHTML = `Configurado para: <strong>${email}</strong>`;
+  document.getElementById('backupStatus').innerHTML = `Configurado para: ${email}`;
   alert('Backup configurado!');
 });
 
@@ -267,7 +292,7 @@ document.getElementById('restoreFile').addEventListener('change', async e => {
   const file = e.target.files[0];
   if (!file) return;
   const pass = localStorage.getItem('backupKey');
-  if (!pass) return alert('Configure a senha primeiro!');
+  if (!pass) return alert('Configure a senha!');
   const entered = prompt('Senha do backup:');
   if (entered !== pass) return alert('Senha errada!');
 
@@ -288,7 +313,7 @@ document.getElementById('restoreFile').addEventListener('change', async e => {
 // ==================== START ====================
 window.addEventListener('load', () => {
   document.getElementById('backupStatus').innerHTML = localStorage.getItem('backupEmail') 
-    ? `Enviando para: <strong>${localStorage.getItem('backupEmail')}</strong>`
+    ? `Enviando para: ${localStorage.getItem('backupEmail')}`
     : 'Backup não configurado';
 
   atualizarTabelaMedias();
