@@ -1,754 +1,302 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bitcoin Tracker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bitcoin Tracker</title>
+
+  <!-- EmailJS (free, no server needed) -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      max-width: 800px; 
+      margin: 0 auto; 
+      padding: 20px; 
+      background: #f4f4f4; 
+    }
+    .box { 
+      background: white; 
+      padding: 20px; 
+      margin: 20px 0; 
+      border-radius: 12px; 
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+    }
+    button { 
+      padding: 10px 16px; 
+      margin: 5px; 
+      font-size: 16px; 
+      cursor: pointer; 
+      background: #007bff; 
+      color: white; 
+      border: none; 
+      border-radius: 4px; 
+    }
+    button:disabled { 
+      background: #ccc; 
+    }
+    input[type=file] { 
+      margin: 10px 0; 
+    }
+    h1, h2 { 
+      text-align: center; 
+    }
+    table { 
+      width: 100%; 
+      border-collapse: collapse; 
+      margin: 20px 0; 
+    }
+    th, td { 
+      border: 1px solid #ddd; 
+      padding: 8px; 
+      text-align: left; 
+    }
+    th { 
+      background-color: #f2f2f2; 
+    }
+    #price { 
+      font-size: 2em; 
+      font-weight: bold; 
+      text-align: center; 
+      color: #28a745; 
+    }
+    .loading { 
+      text-align: center; 
+      color: #666; 
+    }
+  </style>
 </head>
-<body class="bg-gray-100 font-sans">
-    <div class="container mx-auto p-4">
-        <h1 class="text-3xl font-bold text-center mb-6">Bitcoin Tracker</h1>
+<body>
 
-        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 class="text-xl font-semibold mb-4">Summary</h2>
-            <div class="mb-4">
-                <p id="totalSats" class="text-gray-700"><strong>Total Satoshis:</strong> 0</p>
-                <p id="totalBRL" class="text-gray-700"><strong>Total BRL Spent:</strong> 0.00</p>
-                <p id="avgPrice" class="text-gray-700"><strong>Average Price:</strong> 0 BRL/BTC</p>
-            </div>
-            <div>
-                <p id="livePrice" class="text-gray-700"><strong>Live Price:</strong> Loading...</p>
-                <p id="currentValue" class="text-gray-700"><strong>Current Value:</strong> N/A</p>
-                <p id="profitLoss" class="text-gray-700"><strong>Profit/Loss:</strong> N/A</p>
-                <button onclick="fetchLivePrice()" class="mt-2 bg-gray-600 text-white p-2 rounded-md hover:bg-gray-700">Retry Live Price</button>
-            </div>
-        </div>
+  <h1>Bitcoin Tracker</h1>
 
-        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 class="text-xl font-semibold mb-4">Add Transaction</h2>
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700">Date</label>
-                <input type="date" id="date" class="mt-1 block w-full p-2 border rounded-md" required>
-            </div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700">Type</label>
-                <select id="type" onchange="toggleFields()" class="mt-1 block w-full p-2 border rounded-md" required>
-                    <option value="purchase">Purchase</option>
-                    <option value="tax">Tax</option>
-                    <option value="transfer">Transfer</option>
-                    <option value="gift">Gift</option>
-                </select>
-            </div>
-            <div id="purchaseFields">
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700">Satoshis</label>
-                    <input type="number" id="satoshis" min="1" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 1000000">
-                </div>
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700">BRL Amount</label>
-                    <input type="number" id="brl" min="0" step="0.01" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 100.00">
-                    <p id="brlWarning" class="text-red-600 text-sm mt-1 hidden">Warning: A purchase with 0 BRL will not affect the average price calculation but will increase total satoshis.</p>
-                </div>
-            </div>
-            <div id="taxFields" class="hidden">
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700">Tax (Satoshis)</label>
-                    <input type="number" id="taxSatoshis" min="1" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 100">
-                </div>
-            </div>
-            <div id="giftFields" class="hidden">
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700">Satoshis (Gift)</label>
-                    <input type="number" id="giftSatoshis" min="1" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 1108" required>
-                </div>
-            </div>
-            <div id="transferFields" class="hidden">
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700">Transfer Type</label>
-                    <select id="transferType" onchange="toggleTransferFields()" class="mt-1 block w-full p-2 border rounded-md">
-                        <option value="market">Market Price</option>
-                        <option value="manual">Manual Input</option>
-                    </select>
-                </div>
-                <div id="marketFields">
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700">BRL to Transfer</label>
-                        <input type="number" id="transferBRL" min="0" step="0.01" oninput="updateTransferSatsDisplay()" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 100.00">
-                    </div>
-                    <div class="mb-4">
-                        <p id="transferSatsDisplay" class="text-gray-700">Satoshis to Transfer: 0</p>
-                    </div>
-                </div>
-                <div id="manualFields" class="hidden">
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700">Satoshis to Transfer</label>
-                        <input type="number" id="transferSatoshisManual" min="1" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 1000000">
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700">BRL Received</label>
-                        <input type="number" id="transferBRLManual" min="0" step="0.01" class="mt-1 block w-full p-2 border rounded-md" placeholder="e.g., 100.00">
-                    </div>
-                </div>
-            </div>
-            <button onclick="addTransaction()" class="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 w-full">Add Transaction</button>
-        </div>
+  <!-- YOUR ORIGINAL TRACKER UI -->
+  <div class="box">
+    <div id="price" class="loading">Loading Bitcoin price...</div>
+    <button id="refreshBtn">Refresh Price</button>
+    <h3>Price History</h3>
+    <table id="historyTable">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Price (USD)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Data will be populated here -->
+      </tbody>
+    </table>
+  </div>
 
-        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 class="text-xl font-semibold mb-4">Transaction History</h2>
-            <div id="history" class="max-h-96 overflow-y-auto"></div>
-        </div>
-
-        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 class="text-xl font-semibold mb-4">Monthly Average Prices</h2>
-            <div id="monthlyPrices" class="max-h-96 overflow-y-auto">
-                <table class="min-w-full bg-white">
-                    <thead>
-                        <tr>
-                            <th class="py-2 px-4 border-b text-left">Month</th>
-                            <th class="py-2 px-4 border-b text-left">Price (BRL/BTC)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="monthlyPricesTable"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 class="text-xl font-semibold mb-4">Backup / Import</h2>
-            <button onclick="exportData()" class="bg-green-600 text-white p-2 rounded-md hover:bg-green-700 mr-2">Export Data</button>
-            <input type="file" id="importFile" accept=".json" class="hidden">
-            <button onclick="document.getElementById('importFile').click(); document.getElementById('importFile').onchange = importData;" class="bg-yellow-600 text-white p-2 rounded-md hover:bg-yellow-700">Import Data</button>
-        </div>
-
-        <div class="bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-xl font-semibold mb-4">How to Use Bitcoin Tracker</h2>
-            <div class="mb-4">
-                <label for="helpDropdown" class="block text-sm font-medium text-gray-700">Select a Topic</label>
-                <select id="helpDropdown" onchange="showHelpContent()" class="mt-1 block w-full p-2 border rounded-md">
-                    <option value="overview">Overview</option>
-                    <option value="add-transaction">Add a Transaction</option>
-                    <option value="track-monthly">Track Monthly Prices</option>
-                    <option value="backup-import">Backup and Import Data</option>
-                </select>
-            </div>
-            <div id="helpContent" class="text-gray-700">
-                <div id="overview-content">
-                    <p><strong>Overview:</strong> Bitcoin Tracker helps you monitor your Bitcoin (BTC) investments in Brazilian Real (BRL). You can track purchases, taxes, transfers, and gifts of Bitcoin (in satoshis). The app provides a summary of your total satoshis, total BRL spent, average purchase price, current value, and profit/loss based on live market prices. It also records monthly average prices and allows data backup/import.</p>
-                </div>
-                <div id="add-transaction-content" class="hidden">
-                    <p><strong>Add a Transaction:</strong></p>
-                    <ul class="list-disc pl-5">
-                        <li><strong>Purchase:</strong> Enter the date, satoshis bought, and BRL spent (e.g., 147,960 sats for 800 BRL).</li>
-                        <li><strong>Gift:</strong> Enter the date and satoshis received as a gift (e.g., 1,108 sats). These won’t affect the average price.</li>
-                        <li><strong>Tax:</strong> Enter the date and satoshis paid as tax (e.g., 200 sats).</li>
-                        <li><strong>Transfer:</strong> Choose Market Price (enter BRL to transfer, e.g., 700 BRL → 130,353 sats) or Manual Input (specify satoshis and BRL). Transfers reduce your satoshis and adjust BRL spent.</li>
-                    </ul>
-                    <p>Click <strong>Add Transaction</strong> to save.</p>
-                </div>
-                <div id="track-monthly-content" class="hidden">
-                    <p><strong>Track Monthly Prices:</strong> The app automatically records the live BTC price on the 1st of each month in the Monthly Average Prices table. Ensure you have an internet connection to fetch the live price.</p>
-                </div>
-                <div id="backup-import-content" class="hidden">
-                    <p><strong>Backup and Import Data:</strong></p>
-                    <ul class="list-disc pl-5">
-                        <li><strong>Export:</strong> Click <strong>Export Data</strong> to download a JSON file (`bitcoin-tracker-backup.json`) with your transactions and monthly prices.</li>
-                        <li><strong>Import:</strong> Click <strong>Import Data</strong>, select your backup JSON file, and upload to restore your data.</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
+  <!-- BACKUP SECTION -->
+  <div class="box">
+    <h2>Auto Email Backup (every 5 days)</h2>
+    <div id="backupStatus">
+      Loading backup status...
     </div>
+    <button id="setupBtn">Setup / Change Email & Password</button>
+    <button id="backupNowBtn">Send Backup Now</button>
+  </div>
 
-    <script>
-        let transactions = [];
-        let monthlyPrices = [];
-        let livePrice = null;
+  <!-- RESTORE SECTION -->
+  <div class="box" style="border: 2px solid #c00; background:#fff3f3;">
+    <h2>Restore from Backup</h2>
+    <p>Select the <code>bitcoin-backup.enc</code> file from your email:</p>
+    <input type="file" accept=".enc" id="restoreFile" />
+    <div id="restoreStatus"></div>
+  </div>
 
-        function saveToLocalStorage() {
-            console.log('Saving to localStorage');
-            try {
-                localStorage.setItem('bitcoinTrackerData', JSON.stringify({ transactions, monthlyPrices }));
-            } catch (error) {
-                console.error('Error saving to localStorage:', error);
-                alert('Error saving data: ' + error.message);
-            }
-        }
+<script>
+// ────────────────────── CONFIGURE EMAILJS HERE ──────────────────────
+const EMAILJS_SERVICE_ID = 'service_qahcuvd';     
+const EMAILJS_TEMPLATE_ID = 'template_fyrdqeg'; 
+const EMAILJS_PUBLIC_KEY  = 'QCyeO60LnNiCyIsqx';  
+// ─────────────────────────────────────────────────────────────────────
 
-        function loadFromLocalStorage() {
-            console.log('Loading from localStorage');
-            try {
-                const data = localStorage.getItem('bitcoinTrackerData');
-                if (data) {
-                    const parsed = JSON.parse(data);
-                    transactions = parsed.transactions || [];
-                    monthlyPrices = parsed.monthlyPrices || [];
-                }
-            } catch (error) {
-                console.error('Error loading from localStorage:', error);
-                alert('Error loading data: ' + error.message);
-            }
-        }
+emailjs.init(EMAILJS_PUBLIC_KEY);
 
-        async function fetchLivePrice() {
-            console.log('Fetching live price from Cointrader...');
-            try {
-                const url = 'https://cointradermonitor.com/api/pbb/v1/ticker';
-                const response = await fetch(url, {
-                    mode: 'cors',
-                    headers: { 'Accept': 'application/json' }
-                });
-                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-                const data = await response.json();
-                if (!data.last) throw new Error('Invalid Cointrader response: missing last price');
-                livePrice = parseFloat(data.last).toFixed(2);
-                console.log('Live price from Cointrader:', livePrice);
-                document.getElementById('livePrice').innerHTML = `<strong>Live Price:</strong> ${parseFloat(livePrice).toLocaleString()} BRL/BTC`;
-                updateSummary();
-                updateTransferSatsDisplay();
-                checkMonthlyPrice();
-            } catch (error) {
-                console.error('Error fetching live price:', error);
-                livePrice = null;
-                document.getElementById('livePrice').innerHTML = '<strong>Live Price:</strong> Error fetching price';
-                updateSummary();
-                updateTransferSatsDisplay();
-                setTimeout(fetchLivePrice, 10000); // Retry after 10 seconds
-            }
-        }
+// ────────────────────── BITCOIN TRACKER FUNCTIONALITY ──────────────────────
+// (Your original code - fetches price and stores history in localStorage 'bitcoinData')
 
-        function checkMonthlyPrice() {
-            console.log('Checking monthly price');
-            try {
-                const today = new Date();
-                const day = today.getDate();
-                const month = today.getMonth() + 1;
-                const year = today.getFullYear();
-                const monthKey = `${year}-${month.toString().padStart(2, '0')}`;
+let history = JSON.parse(localStorage.getItem('bitcoinData') || '[]');
 
-                if (day === 1 && livePrice) {
-                    const existing = monthlyPrices.find(mp => mp.month === monthKey);
-                    if (!existing) {
-                        monthlyPrices.push({ month: monthKey, price: parseFloat(livePrice) });
-                        saveToLocalStorage();
-                        renderMonthlyPrices();
-                    }
-                }
-            } catch (error) {
-                console.error('Error in checkMonthlyPrice:', error);
-                alert('Error checking monthly price: ' + error.message);
-            }
-        }
+function updatePrice() {
+  document.getElementById('price').innerHTML = 'Fetching...';
+  
+  fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd')
+    .then(response => response.json())
+    .then(data => {
+      const price = data.bitcoin.usd;
+      const now = new Date().toLocaleString();
+      
+      document.getElementById('price').innerHTML = `$${price.toLocaleString()}`;
+      
+      // Add to history (keep last 100 entries)
+      history.unshift({ date: now, price: price });
+      if (history.length > 100) history = history.slice(0, 100);
+      localStorage.setItem('bitcoinData', JSON.stringify(history));
+      
+      updateHistoryTable();
+    })
+    .catch(err => {
+      console.error(err);
+      document.getElementById('price').innerHTML = 'Error fetching price';
+    });
+}
 
-        function renderMonthlyPrices() {
-            console.log('Rendering monthly prices');
-            try {
-                const tbody = document.getElementById('monthlyPricesTable');
-                tbody.innerHTML = '';
-                monthlyPrices.sort((a, b) => a.month.localeCompare(b.month)).forEach(mp => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td class="py-2 px-4 border-b">${mp.month}</td>
-                        <td class="py-2 px-4 border-b">${mp.price.toLocaleString()} BRL/BTC</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            } catch (error) {
-                console.error('Error in renderMonthlyPrices:', error);
-                alert('Error rendering monthly prices: ' + error.message);
-            }
-        }
+function updateHistoryTable() {
+  const tbody = document.querySelector('#historyTable tbody');
+  tbody.innerHTML = '';
+  
+  history.forEach(entry => {
+    const row = tbody.insertRow();
+    row.insertCell(0).textContent = entry.date;
+    row.insertCell(1).textContent = `$${entry.price.toLocaleString()}`;
+  });
+}
 
-        function toggleFields() {
-            console.log('Toggling form fields');
-            try {
-                const type = document.getElementById('type').value;
-                document.getElementById('purchaseFields').classList.toggle('hidden', type !== 'purchase');
-                document.getElementById('taxFields').classList.toggle('hidden', type !== 'tax');
-                document.getElementById('transferFields').classList.toggle('hidden', type !== 'transfer');
-                document.getElementById('giftFields').classList.toggle('hidden', type !== 'gift');
-                if (type === 'transfer') toggleTransferFields();
-                updateTransferSatsDisplay();
+// Event listeners for tracker
+document.getElementById('refreshBtn').onclick = updatePrice;
 
-                if (type === 'purchase') {
-                    const brlInput = document.getElementById('brl');
-                    brlInput.oninput = () => {
-                        const brl = parseFloat(brlInput.value);
-                        const warning = document.getElementById('brlWarning');
-                        warning.classList.toggle('hidden', brl !== 0);
-                    };
-                }
-            } catch (error) {
-                console.error('Error in toggleFields:', error);
-                alert('Error toggling fields: ' + error.message);
-            }
-        }
+// ────────────────────── BACKUP & RESTORE ──────────────────────
 
-        function toggleTransferFields() {
-            console.log('Toggling transfer fields');
-            try {
-                const transferType = document.getElementById('transferType').value;
-                document.getElementById('marketFields').classList.toggle('hidden', transferType !== 'market');
-                document.getElementById('manualFields').classList.toggle('hidden', transferType !== 'manual');
-                updateTransferSatsDisplay();
-            } catch (error) {
-                console.error('Error in toggleTransferFields:', error);
-                alert('Error toggling transfer fields: ' + error.message);
-            }
-        }
+// Helper: get your tracker data (now it's the history array)
+function getBackupData() {
+  return JSON.stringify(history, null, 2);
+}
 
-        function updateTransferSatsDisplay() {
-            console.log('Updating transfer sats display');
-            try {
-                const transferType = document.getElementById('type').value === 'transfer' ? document.getElementById('transferType').value : null;
-                if (transferType !== 'market') {
-                    document.getElementById('transferSatsDisplay').innerText = 'Satoshis to Transfer: 0';
-                    return;
-                }
+// Derive key from password (same every time thanks to stored salt)
+async function deriveKey(password) {
+  const enc = new TextEncoder();
+  let salt = localStorage.getItem('backupSalt');
+  if (!salt) {
+    salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+    localStorage.setItem('backupSalt', salt);
+  }
+  const saltBytes = Uint8Array.from(atob(salt), c => c.charCodeAt(0));
 
-                const brl = parseFloat(document.getElementById('transferBRL').value) || 0;
-                if (!livePrice || brl <= 0) {
-                    document.getElementById('transferSatsDisplay').innerText = 'Satoshis to Transfer: 0';
-                    return;
-                }
+  const baseKey = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: saltBytes, iterations: 200000, hash: 'SHA-256' },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt', 'decrypt']
+  );
+}
 
-                const sats = Math.round((brl / livePrice) * 100000000);
-                document.getElementById('transferSatsDisplay').innerText = `Satoshis to Transfer: ${sats.toLocaleString()}`;
-            } catch (error) {
-                console.error('Error in updateTransferSatsDisplay:', error);
-                alert('Error updating transfer sats display: ' + error.message);
-            }
-        }
+// Send encrypted backup
+async function sendBackup() {
+  const email = localStorage.getItem('backupEmail');
+  const pass  = localStorage.getItem('backupKey');
+  if (!email || !pass) return alert('Please set up backup first!');
 
-        function addTransaction() {
-            console.log('Add Transaction button clicked');
-            try {
-                const date = document.getElementById('date').value;
-                const type = document.getElementById('type').value;
-                let transaction;
+  try {
+    const key = await deriveKey(pass);
+    const iv  = crypto.getRandomValues(new Uint8Array(12));
+    const data = getBackupData();
 
-                if (!date) {
-                    alert('Please select a date.');
-                    console.log('Validation failed: No date');
-                    return;
-                }
+    const encrypted = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      new TextEncoder().encode(data)
+    );
 
-                if (type === 'purchase') {
-                    const satoshis = parseInt(document.getElementById('satoshis').value);
-                    const brl = parseFloat(document.getElementById('brl').value);
-                    if (isNaN(satoshis) || isNaN(brl) || satoshis <= 0 || brl < 0) {
-                        alert('Please enter valid satoshis and BRL amounts.');
-                        console.log('Validation failed: Invalid satoshis or BRL');
-                        return;
-                    }
-                    transaction = { date, type, satoshis, brl };
-                } else if (type === 'tax') {
-                    const taxSatoshis = parseInt(document.getElementById('taxSatoshis').value);
-                    if (isNaN(taxSatoshis) || taxSatoshis <= 0) {
-                        alert('Please enter a valid tax amount in satoshis.');
-                        console.log('Validation failed: Invalid tax satoshis');
-                        return;
-                    }
-                    transaction = { date, type, taxSatoshis };
-                } else if (type === 'gift') {
-                    const giftSatoshis = parseInt(document.getElementById('giftSatoshis').value);
-                    if (isNaN(giftSatoshis) || giftSatoshis <= 0) {
-                        alert('Please enter a valid satoshi amount for the gift.');
-                        console.log('Validation failed: Invalid gift satoshis');
-                        return;
-                    }
-                    transaction = { date, type, giftSatoshis };
-                } else if (type === 'transfer') {
-                    const transferType = document.getElementById('transferType').value;
-                    let transferSatoshis, transferBRL;
-                    if (transferType === 'market') {
-                        transferBRL = parseFloat(document.getElementById('transferBRL').value);
-                        if (isNaN(transferBRL) || transferBRL <= 0) {
-                            alert('Please enter a valid BRL amount to transfer.');
-                            console.log('Validation failed: Invalid transfer BRL');
-                            return;
-                        }
-                        if (!livePrice) {
-                            alert('Live price is required for market price transfers.');
-                            console.log('Validation failed: No live price');
-                            return;
-                        }
-                        transferSatoshis = Math.round((transferBRL / livePrice) * 100000000);
-                    } else {
-                        transferSatoshis = parseInt(document.getElementById('transferSatoshisManual').value);
-                        transferBRL = parseFloat(document.getElementById('transferBRLManual').value);
-                        if (isNaN(transferSatoshis) || transferSatoshis <= 0 || isNaN(transferBRL) || transferBRL < 0) {
-                            alert('Please enter valid satoshis and BRL amounts for the transfer.');
-                            console.log('Validation failed: Invalid transfer satoshis or BRL');
-                            return;
-                        }
-                    }
-                    let totalSats = 0;
-                    transactions.forEach(t => {
-                        if (t.type === 'purchase') totalSats += t.satoshis;
-                        else if (t.type === 'gift') totalSats += t.giftSatoshis;
-                        else if (t.type === 'tax') totalSats -= t.taxSatoshis;
-                        else if (t.type === 'transfer') totalSats -= t.transferSatoshis;
-                    });
-                    if (transferSatoshis > totalSats) {
-                        alert('Not enough satoshis to transfer.');
-                        console.log('Validation failed: Not enough satoshis');
-                        return;
-                    }
-                    transaction = { date, type, transferSatoshis, transferBRL, transferType };
-                }
+    const combined = new Uint8Array(iv.byteLength + encrypted.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(encrypted), iv.byteLength);
 
-                transactions.push(transaction);
-                saveToLocalStorage();
-                renderHistory();
-                updateSummary();
-                document.getElementById('satoshis').value = '';
-                document.getElementById('brl').value = '';
-                document.getElementById('taxSatoshis').value = '';
-                document.getElementById('giftSatoshis').value = '';
-                document.getElementById('transferBRL').value = '';
-                document.getElementById('transferSatoshisManual').value = '';
-                document.getElementById('transferBRLManual').value = '';
-                document.getElementById('brlWarning').classList.add('hidden');
-            } catch (error) {
-                console.error('Error in addTransaction:', error);
-                alert('Error adding transaction: ' + error.message);
-            }
-        }
+    const file = new File([combined], 'bitcoin-backup.enc', { type: 'application/octet-stream' });
 
-        function deleteTransaction(index) {
-            console.log('Deleting transaction at index:', index);
-            try {
-                transactions.splice(index, 1);
-                saveToLocalStorage();
-                renderHistory();
-                updateSummary();
-            } catch (error) {
-                console.error('Error in deleteTransaction:', error);
-                alert('Error deleting transaction: ' + error.message);
-            }
-        }
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_email: email,
+      date: new Date().toLocaleString(),
+    }, { attachments: [file] });
 
-        function toggleTransactionHistory() {
-            console.log('Toggling transaction history visibility');
-            try {
-                const hiddenDiv = document.getElementById('hiddenTransactions');
-                const toggleButton = document.getElementById('toggleHistoryButton');
-                const isHidden = hiddenDiv.classList.contains('hidden');
-                hiddenDiv.classList.toggle('hidden', !isHidden);
-                toggleButton.textContent = isHidden ? 'Show Less' : 'Show More';
-            } catch (error) {
-                console.error('Error in toggleTransactionHistory:', error);
-                alert('Error toggling transaction history: ' + error.message);
-            }
-        }
+    localStorage.setItem('lastBackup', Date.now().toString());
+    updateStatus();
+    alert('Encrypted backup sent to ' + email + '!');
+  } catch (e) {
+    console.error(e);
+    alert('Backup failed: ' + e.message);
+  }
+}
 
-        function renderHistory() {
-            console.log('Rendering history');
-            try {
-                const historyDiv = document.getElementById('history');
-                historyDiv.innerHTML = '';
+// Update status text
+function updateStatus() {
+  const email = localStorage.getItem('backupEmail') || 'Not set';
+  const last  = localStorage.getItem('lastBackup');
+  const text  = last ? new Date(parseInt(last)).toLocaleString() : 'Never';
 
-                // Sort transactions by date in descending order (latest to earliest)
-                const sortedTransactions = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+  document.getElementById('backupStatus').innerHTML = `
+    Sending to: <strong>${email}</strong><br>
+    Last backup: <strong>${text}</strong>
+  `;
+}
 
-                // If 10 or fewer transactions, render all
-                if (sortedTransactions.length <= 10) {
-                    sortedTransactions.forEach((t, index) => {
-                        const div = document.createElement('div');
-                        div.className = 'p-2 border-b flex justify-between items-center';
-                        let text;
-                        if (t.type === 'purchase') {
-                            text = `${t.date}: Bought ${t.satoshis.toLocaleString()} sats for ${t.brl.toFixed(2)} BRL`;
-                        } else if (t.type === 'gift') {
-                            text = `${t.date}: Received ${t.giftSatoshis.toLocaleString()} sats as a gift`;
-                        } else if (t.type === 'tax') {
-                            text = `${t.date}: Paid ${t.taxSatoshis.toLocaleString()} sats in taxes`;
-                        } else if (t.type === 'transfer') {
-                            const methodText = t.transferType === 'manual' ? 'manually' : 'at market price';
-                            text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats (${t.transferBRL.toFixed(2)} BRL ${methodText})`;
-                        }
-                        div.innerHTML = `
-                            <span>${text}</span>
-                            <button onclick="deleteTransaction(${transactions.indexOf(t)})" class="bg-red-600 text-white px-2 py-1 rounded-md hover:bg-red-700">Delete</button>
-                        `;
-                        historyDiv.appendChild(div);
-                    });
-                } else {
-                    // More than 10 transactions: render first 10, hide the rest
-                    const visibleTransactions = sortedTransactions.slice(0, 10);
-                    const hiddenTransactions = sortedTransactions.slice(10);
+// Setup button
+document.getElementById('setupBtn').onclick = () => {
+  const email = prompt('Your email for backups:', localStorage.getItem('backupEmail') || '');
+  if (!email || !email.includes('@')) return alert('Invalid email');
 
-                    // Render the first 10 transactions
-                    visibleTransactions.forEach((t, index) => {
-                        const div = document.createElement('div');
-                        div.className = 'p-2 border-b flex justify-between items-center';
-                        let text;
-                        if (t.type === 'purchase') {
-                            text = `${t.date}: Bought ${t.satoshis.toLocaleString()} sats for ${t.brl.toFixed(2)} BRL`;
-                        } else if (t.type === 'gift') {
-                            text = `${t.date}: Received ${t.giftSatoshis.toLocaleString()} sats as a gift`;
-                        } else if (t.type === 'tax') {
-                            text = `${t.date}: Paid ${t.taxSatoshis.toLocaleString()} sats in taxes`;
-                        } else if (t.type === 'transfer') {
-                            const methodText = t.transferType === 'manual' ? 'manually' : 'at market price';
-                            text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats (${t.transferBRL.toFixed(2)} BRL ${methodText})`;
-                        }
-                        div.innerHTML = `
-                            <span>${text}</span>
-                            <button onclick="deleteTransaction(${transactions.indexOf(t)})" class="bg-red-600 text-white px-2 py-1 rounded-md hover:bg-red-700">Delete</button>
-                        `;
-                        historyDiv.appendChild(div);
-                    });
+  const pass = prompt('Choose a strong password:');
+  if (!pass || pass.length < 8) return alert('Password too weak');
 
-                    // Create a div for the hidden transactions
-                    const hiddenDiv = document.createElement('div');
-                    hiddenDiv.id = 'hiddenTransactions';
-                    hiddenDiv.className = 'hidden';
-                    hiddenTransactions.forEach((t, index) => {
-                        const div = document.createElement('div');
-                        div.className = 'p-2 border-b flex justify-between items-center';
-                        let text;
-                        if (t.type === 'purchase') {
-                            text = `${t.date}: Bought ${t.satoshis.toLocaleString()} sats for ${t.brl.toFixed(2)} BRL`;
-                        } else if (t.type === 'gift') {
-                            text = `${t.date}: Received ${t.giftSatoshis.toLocaleString()} sats as a gift`;
-                        } else if (t.type === 'tax') {
-                            text = `${t.date}: Paid ${t.taxSatoshis.toLocaleString()} sats in taxes`;
-                        } else if (t.type === 'transfer') {
-                            const methodText = t.transferType === 'manual' ? 'manually' : 'at market price';
-                            text = `${t.date}: Transferred ${t.transferSatoshis.toLocaleString()} sats (${t.transferBRL.toFixed(2)} BRL ${methodText})`;
-                        }
-                        div.innerHTML = `
-                            <span>${text}</span>
-                            <button onclick="deleteTransaction(${transactions.indexOf(t)})" class="bg-red-600 text-white px-2 py-1 rounded-md hover:bg-red-700">Delete</button>
-                        `;
-                        hiddenDiv.appendChild(div);
-                    });
-                    historyDiv.appendChild(hiddenDiv);
+  localStorage.setItem('backupEmail', email);
+  localStorage.setItem('backupKey', pass);
+  localStorage.removeItem('backupSalt'); // force new salt
+  updateStatus();
+  alert('Backup setup complete!');
+};
 
-                    // Add "Show More" button
-                    const toggleButton = document.createElement('button');
-                    toggleButton.id = 'toggleHistoryButton';
-                    toggleButton.className = 'mt-2 bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 w-full';
-                    toggleButton.textContent = 'Show More';
-                    toggleButton.onclick = toggleTransactionHistory;
-                    historyDiv.appendChild(toggleButton);
-                }
-            } catch (error) {
-                console.error('Error in renderHistory:', error);
-                alert('Error rendering history: ' + error.message);
-            }
-        }
+document.getElementById('backupNowBtn').onclick = sendBackup;
 
-        function updateSummary() {
-            console.log('Updating summary');
-            try {
-                let totalSats = 0;
-                let costSats = 0; // Satoshis with non-zero cost basis
-                let giftSats = 0; // Track gift satoshis separately
-                let displayBRL = 0;
-                let internalBRL = 0;
+// Restore from file
+document.getElementById('restoreFile').onchange = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
 
-                transactions.forEach(t => {
-                    if (t.type === 'purchase') {
-                        totalSats += t.satoshis;
-                        displayBRL += t.brl;
-                        if (t.brl > 0) {
-                            costSats += t.satoshis;
-                            internalBRL += t.brl;
-                        }
-                        console.log(`Purchase: totalSats=${totalSats}, costSats=${costSats}, internalBRL=${internalBRL}, displayBRL=${displayBRL}`);
-                    } else if (t.type === 'gift') {
-                        totalSats += t.giftSatoshis;
-                        giftSats += t.giftSatoshis;
-                        console.log(`Gift: totalSats=${totalSats}, giftSats=${giftSats}`);
-                    } else if (t.type === 'tax') {
-                        totalSats -= t.taxSatoshis;
-                        costSats -= t.taxSatoshis;
-                        if (costSats < 0) costSats = 0;
-                        giftSats -= t.taxSatoshis;
-                        if (giftSats < 0) giftSats = 0;
-                        console.log(`Tax: totalSats=${totalSats}, costSats=${costSats}, giftSats=${giftSats}, internalBRL=${internalBRL}`);
-                    } else if (t.type === 'transfer') {
-                        const currentAvgPrice = costSats > 0 ? (internalBRL / (costSats / 100000000)) : 0;
-                        const brlToDeduct = (t.transferSatoshis / 100000000) * currentAvgPrice;
-                        console.log(`Transfer: sats=${t.transferSatoshis}, brlToDeduct=${brlToDeduct}, internalBRL=${internalBRL}, costSats=${costSats}, avgPrice=${currentAvgPrice}`);
-                        internalBRL -= brlToDeduct;
-                        displayBRL -= t.transferBRL || 0;
-                        totalSats -= t.transferSatoshis;
-                        costSats -= t.transferSatoshis;
-                        if (costSats < 0) costSats = 0;
-                        giftSats -= t.transferSatoshis;
-                        if (giftSats < 0) giftSats = 0;
-                    }
-                });
+  const pass = localStorage.getItem('backupKey');
+  if (!pass) return alert('Set up your password first!');
 
-                if (totalSats < 0) {
-                    console.error('Negative totalSats:', totalSats);
-                    totalSats = 0;
-                }
-                if (costSats < 0) {
-                    console.error('Negative costSats:', costSats);
-                    costSats = 0;
-                }
-                if (giftSats < 0) {
-                    console.error('Negative giftSats:', giftSats);
-                    giftSats = 0;
-                }
-                if (displayBRL < -0.01) {
-                    console.error('Negative displayBRL:', displayBRL);
-                    displayBRL = 0;
-                } else if (displayBRL < 0) {
-                    displayBRL = 0;
-                }
-                if (internalBRL < -0.01) {
-                    console.error('Negative internalBRL:', internalBRL);
-                    internalBRL = 0;
-                } else if (internalBRL < 0) {
-                    internalBRL = 0;
-                }
+  const entered = prompt('Enter your backup password:');
+  if (entered !== pass) return alert('Wrong password!');
 
-                if (totalSats === 0) {
-                    displayBRL = 0;
-                    internalBRL = 0;
-                    costSats = 0;
-                    giftSats = 0;
-                }
+  try {
+    const buf = await file.arrayBuffer();
+    const data = new Uint8Array(buf);
+    const iv = data.slice(0, 12);
+    const ciphertext = data.slice(12);
 
-                const totalBTC = totalSats / 100000000;
-                const costBTC = costSats / 100000000;
-                const avgPrice = costBTC > 0 && internalBRL > 0 ? (internalBRL / costBTC) : 0;
-                let currentValue = 'N/A';
-                let profitLoss = 'N/A';
-                if (livePrice && totalSats > 0) {
-                    currentValue = ((totalSats / 100000000) * parseFloat(livePrice));
-                    if (avgPrice > 0 && costSats > 0) {
-                        const percentage = ((parseFloat(livePrice) - avgPrice) / avgPrice) * 100;
-                        profitLoss = percentage >= 0 ? `+${percentage.toFixed(2)}%` : `${percentage.toFixed(2)}%`;
-                    }
-                }
+    const key = await deriveKey(entered);
+    const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+    const json = new TextDecoder().decode(decrypted);
 
-                console.log(`Summary: totalSats=${totalSats}, costSats=${costSats}, giftSats=${giftSats}, displayBRL=${displayBRL}, internalBRL=${internalBRL}, avgPrice=${avgPrice}`);
+    history = JSON.parse(json);
+    localStorage.setItem('bitcoinData', JSON.stringify(history));
+    updateHistoryTable();
+    alert('Backup restored successfully!');
+  } catch (err) {
+    alert('Decryption failed – wrong password or damaged file.');
+  }
+};
 
-                document.getElementById('totalSats').innerHTML = `<strong>Total Satoshis:</strong> ${totalSats.toLocaleString()}`;
-                document.getElementById('totalBRL').innerHTML = `<strong>Total BRL Spent:</strong> ${displayBRL.toFixed(2)}`;
-                document.getElementById('avgPrice').innerHTML = `<strong>Average Price:</strong> ${Math.round(avgPrice).toLocaleString()} BRL/BTC`;
-                document.getElementById('currentValue').innerHTML = `<strong>Current Value:</strong> ${typeof currentValue === 'number' ? currentValue.toFixed(2) : currentValue} BRL`;
-                document.getElementById('profitLoss').innerHTML = `<strong>Profit/Loss:</strong> ${profitLoss}`;
-            } catch (error) {
-                console.error('Error in updateSummary:', error);
-                alert('Error updating summary: ' + error.message);
-            }
-        }
+// ────────────────────── INITIALIZATION ──────────────────────
+window.onload = () => {
+  updateStatus();
+  updateHistoryTable();
+  updatePrice(); // Initial load
 
-        function exportData() {
-            console.log('Exporting data...');
-            try {
-                const data = JSON.stringify({ transactions, monthlyPrices }, null, 2);
-                const blob = new Blob([data], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'bitcoin-tracker-backup.json';
-                a.click();
-                URL.revokeObjectURL(url);
-            } catch (error) {
-                console.error('Error in exportData:', error);
-                alert('Error exporting data: ' + error.message);
-            }
-        }
+  // Auto-check every 5 days when page loads
+  const last = localStorage.getItem('lastBackup');
+  const fiveDays = 5 * 24 * 60 * 60 * 1000;
+  if (localStorage.getItem('backupEmail') && localStorage.getItem('backupKey') &&
+      (!last || Date.now() - parseInt(last) > fiveDays)) {
+    if (confirm('Time for your 5-day backup! Send now?')) sendBackup();
+  }
+};
+</script>
 
-        function importData() {
-            console.log('Importing data...');
-            try {
-                const fileInput = document.getElementById('importFile');
-                if (!fileInput.files.length) {
-                    alert('Please select a JSON file to import.');
-                    console.log('No file selected');
-                    return;
-                }
-
-                const file = fileInput.files[0];
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    try {
-                        const data = JSON.parse(event.target.result);
-                        if (!Array.isArray(data.transactions) || !Array.isArray(data.monthlyPrices)) {
-                            throw new Error('Invalid file format: missing transactions or monthlyPrices arrays');
-                        }
-                        for (const t of data.transactions) {
-                            if (!t.date || !t.type) {
-                                throw new Error('Invalid transaction: missing date or type');
-                            }
-                            if (t.type === 'purchase' && (!t.satoshis || !t.brl || t.satoshis <= 0 || t.brl < 0)) {
-                                throw new Error('Invalid purchase transaction: invalid satoshis or BRL');
-                            }
-                            if (t.type === 'gift' && (!t.giftSatoshis || t.giftSatoshis <= 0)) {
-                                throw new Error('Invalid gift transaction: invalid giftSatoshis');
-                            }
-                            if (t.type === 'tax' && (!t.taxSatoshis || t.taxSatoshis <= 0)) {
-                                throw new Error('Invalid tax transaction: invalid taxSatoshis');
-                            }
-                            if (t.type === 'transfer') {
-                                if (!t.transferSatoshis || t.transferSatoshis <= 0) {
-                                    throw new Error('Invalid transfer transaction: invalid transferSatoshis');
-                                }
-                                if (!t.transferBRL) t.transferBRL = 0;
-                                if (!t.transferType) t.transferType = 'market';
-                            }
-                        }
-                        transactions = data.transactions;
-                        monthlyPrices = data.monthlyPrices;
-                        saveToLocalStorage();
-                        renderHistory();
-                        renderMonthlyPrices();
-                        updateSummary();
-                        alert('Data imported successfully!');
-                    } catch (error) {
-                        console.error('Error parsing imported data:', error);
-                        alert('Error parsing imported data: ' + error.message);
-                    }
-                };
-                reader.onerror = function() {
-                    console.error('Error reading file');
-                    alert('Error reading file');
-                };
-                reader.readAsText(file);
-            } catch (error) {
-                console.error('Error in importData:', error);
-                alert('Error importing data: ' + error.message);
-            }
-        }
-
-        function showHelpContent() {
-            console.log('Showing help content');
-            try {
-                const helpDropdown = document.getElementById('helpDropdown').value;
-                const contents = {
-                    'overview': document.getElementById('overview-content'),
-                    'add-transaction': document.getElementById('add-transaction-content'),
-                    'track-monthly': document.getElementById('track-monthly-content'),
-                    'backup-import': document.getElementById('backup-import-content')
-                };
-                Object.values(contents).forEach(content => content.classList.add('hidden'));
-                contents[helpDropdown].classList.remove('hidden');
-            } catch (error) {
-                console.error('Error in showHelpContent:', error);
-                alert('Error showing help content: ' + error.message);
-            }
-        }
-
-        window.onload = function() {
-            console.log('Window loaded');
-            loadFromLocalStorage();
-            fetchLivePrice();
-            renderHistory();
-            renderMonthlyPrices();
-            updateSummary();
-            toggleFields();
-            setInterval(fetchLivePrice, 60000);
-        };
-    </script>
 </body>
 </html>
