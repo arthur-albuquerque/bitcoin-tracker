@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bitcoin Tracker - Arthur Albuquerque</title>
+  <title>Bitcoin Tracker</title>
   <style>
     body {font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; background:#f9f9f9; padding:10px;}
     .box {background:white; padding:15px; margin:15px 0; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.1);}
@@ -69,9 +69,9 @@
 </div>
 
 <script>
-// ==================== FORMSPREE (FREE & 100% WORKING) ====================
+// ==================== FORMSPREE (FREE & WORKS) ====================
 const FORMSPREE_ENDPOINT = 'https://formspree.io/f/mjknprye'; 
-// =====================================================================
+// ===================================================================
 
 let precoAtual = 0;
 let transacoes = JSON.parse(localStorage.getItem('bitcoinData') || '[]');
@@ -160,12 +160,15 @@ function atualizarHistorico() {
     `;
     div.appendChild(item);
   });
-  document.querySelectorAll('.del').forEach(b=>b.onclick=()=> {
-    if(confirm('Apagar?')) {
-      transacoes.splice(parseInt(b.dataset.index),1);
-      localStorage.setItem('bitcoinData', JSON.stringify(transacoes));
-      atualizarHistorico(); calcularResumo();
-    }
+  document.querySelectorAll('.del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (confirm('Apagar transação?')) {
+        transacoes.splice(parseInt(btn.dataset.index), 1);
+        localStorage.setItem('bitcoinData', JSON.stringify(transacoes));
+        atualizarHistorico();
+        calcularResumo();
+      }
+    });
   });
 }
 
@@ -179,7 +182,7 @@ function atualizarTabelaMedias() {
   });
 }
 
-// ==================== BACKUP (FORMSPREE - FIXED & TESTED) ====================
+// ==================== BACKUP (FORMSPREE - 100% WORKING) ====================
 async function deriveKey(pw) {
   const enc = new TextEncoder();
   let salt = localStorage.getItem('backupSalt');
@@ -204,10 +207,10 @@ async function sendBackup() {
     const file = new File([combined], 'bitcoin-backup.enc', {type:'application/octet-stream'});
 
     const fd = new FormData();
-    fd.append('email', email);           // ← Formspree exige exatamente "email"
+    fd.append('email', email);           // Formspree exige exatamente "email"
     fd.append('subject', 'Backup Bitcoin Tracker - ' + new Date().toLocaleDateString('pt-BR'));
     fd.append('message', 'Seu backup criptografado está anexado.');
-    fd.append('attachment', file);       // ← Formspree exige exatamente "attachment"
+    fd.append('attachment', file);       // Formspree exige exatamente "attachment"
 
     const r = await fetch(FORMSPREE_ENDPOINT, {method:'POST', body:fd});
     if (r.ok) {
@@ -224,7 +227,51 @@ async function sendBackup() {
   }
 }
 
-// ==================== EVENTS & INIT ====================
-document.getElementById('btnAtualizar').onclick = atualizarPreco;
-document.getElementById('btnAdicionar').onclick = adicionarTransacao;
-document.getElementById('tipo').onchange = () => document.getElementBy
+// ==================== EVENT LISTENERS (ONLY addEventListener) ====================
+document.getElementById('btnAtualizar').addEventListener('click', atualizarPreco);
+document.getElementById('btnAdicionar').addEventListener('click', adicionarTransacao);
+document.getElementById('tipo').addEventListener('change', function() {
+  document.getElementById('opcoesTransferencia').style.display = this.value==='Transferência'?'block':'none';
+});
+document.getElementById('setupBtn').addEventListener('click', () => {
+  const e = prompt('Seu email:', localStorage.getItem('backupEmail')||'');
+  if (!e?.includes('@')) return alert('Email inválido');
+  const p = prompt('Senha forte:');
+  if (!p || p.length<8) return alert('Senha fraca');
+  localStorage.setItem('backupEmail', e);
+  localStorage.setItem('backupKey', p);
+  localStorage.removeItem('backupSalt');
+  document.getElementById('backupStatus').innerHTML = `Configurado: ${e}`;
+  alert('Backup configurado!');
+});
+document.getElementById('backupNowBtn').addEventListener('click', sendBackup);
+document.getElementById('restoreFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const p = localStorage.getItem('backupKey'); if (!p) return alert('Configure a senha!');
+  const ep = prompt('Senha:'); if (ep !== p) return alert('Senha errada!');
+  try {
+    const d = new Uint8Array(await f.arrayBuffer());
+    const iv = d.slice(0,12), ct = d.slice(12);
+    const k = await deriveKey(ep);
+    const dec = await crypto.subtle.decrypt({name:'AES-GCM',iv}, k, ct);
+    const {transacoes:t, mediasMensais:m} = JSON.parse(new TextDecoder().decode(dec));
+    transacoes = t; mediasMensais = m;
+    localStorage.setItem('bitcoinData', JSON.stringify(t));
+    localStorage.setItem('mediasMensais', JSON.stringify(m));
+    location.reload();
+  } catch { alert('Restauração falhou'); }
+});
+
+// ==================== INIT ====================
+window.addEventListener('load', () => {
+  document.getElementById('backupStatus').innerHTML = localStorage.getItem('backupEmail') 
+    ? `Enviando para: ${localStorage.getItem('backupEmail')}` 
+    : 'Backup não configurado';
+  atualizarTabelaMedias();
+  atualizarHistorico();
+  atualizarPreco();
+  calcularResumo();
+});
+</script>
+</body>
+</html>
